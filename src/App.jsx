@@ -163,17 +163,19 @@ const CENTROIDS = {
 const ANTARCTICA_ID = "010";
 
 const INITIAL_POSITIONS = {
-  China: { x: 767, y: 261 },
+  China: { x: 768, y: 254 },
   India: { x: 657, y: 352 },
-  Rusia: { x: 753, y: 150 },
-  EEUU: { x: 222, y: 249 },
-  "Irán": { x: 566, y: 240 },
+  Rusia: { x: 754, y: 153 },
+  EEUU: { x: 224, y: 241 },
+  "Irán": { x: 566, y: 238 },
   Indonesia: { x: 815, y: 361 },
-  "Pakistán": { x: 645, y: 242 },
-  Egipto: { x: 453, y: 279 },
+  "Pakistán": { x: 645, y: 238 },
+  Egipto: { x: 460, y: 274 },
   Qatar: { x: 559, y: 364 },
-  "Arabia Saudita": { x: 490, y: 327 }
+  "Arabia Saudita": { x: 486, y: 324 }
 };
+
+const DEFAULT_MAP_OFFSET = { x: -46, y: 52 };
 
 const DEFAULT_DATA = [
   { country: "China", value: 34 },
@@ -594,6 +596,7 @@ export default function App() {
   const [includeBackground, setIncludeBackground] = useState(true);
   const [exportFormat, setExportFormat] = useState("png");
   const [copied, setCopied] = useState(false);
+  const [copiedMapPosition, setCopiedMapPosition] = useState(false);
 
   const [strokeWidth, setStrokeWidth] = useState(0.5);
   const [pctSize, setPctSize] = useState(10);
@@ -605,7 +608,7 @@ export default function App() {
   const [badgeFontWeight, setBadgeFontWeight] = useState(700);
   const [connectorStroke, setConnectorStroke] = useState(0.4);
   const [mapScale, setMapScale] = useState(155);
-  const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
+  const [mapOffset, setMapOffset] = useState(DEFAULT_MAP_OFFSET);
 
   const svgRef = useRef(null);
   const width = 960;
@@ -746,6 +749,14 @@ export default function App() {
     navigator.clipboard.writeText(output).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleCopyMapPosition = () => {
+    const output = `const DEFAULT_MAP_OFFSET = { x: ${Math.round(mapOffset.x)}, y: ${Math.round(mapOffset.y)} };`;
+    navigator.clipboard.writeText(output).then(() => {
+      setCopiedMapPosition(true);
+      setTimeout(() => setCopiedMapPosition(false), 2000);
     });
   };
 
@@ -901,24 +912,43 @@ export default function App() {
             </details>
           </div>
 
-          <button
-            onClick={() => setMapOffset({ x: 0, y: 0 })}
-            style={{
-              width: "100%",
-              padding: "5px",
-              border: "1px solid #e0e0e0",
-              borderRadius: 5,
-              background: "#fafaf8",
-              fontSize: 9,
-              fontWeight: 600,
-              color: "#666",
-              cursor: "pointer",
-              fontFamily: "'DM Sans', sans-serif",
-              marginBottom: 4
-            }}
-          >
-            Reset posicion mapa
-          </button>
+          <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+            <button
+              onClick={() => setMapOffset(DEFAULT_MAP_OFFSET)}
+              style={{
+                flex: 1,
+                padding: "5px",
+                border: "1px solid #e0e0e0",
+                borderRadius: 5,
+                background: "#fafaf8",
+                fontSize: 9,
+                fontWeight: 600,
+                color: "#666",
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif"
+              }}
+            >
+              Reset posicion mapa
+            </button>
+            <button
+              onClick={handleCopyMapPosition}
+              style={{
+                flex: 1,
+                padding: "5px",
+                border: "1px solid #e0e0e0",
+                borderRadius: 5,
+                background: copiedMapPosition ? "#2D8035" : "#fafaf8",
+                fontSize: 9,
+                fontWeight: 600,
+                color: copiedMapPosition ? "white" : "#666",
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+                transition: "all 0.2s"
+              }}
+            >
+              {copiedMapPosition ? "Copiado" : "Copiar pos mapa"}
+            </button>
+          </div>
 
           <div style={{ display: "flex", gap: 3, marginBottom: 14 }}>
             <button
