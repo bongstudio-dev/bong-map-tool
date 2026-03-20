@@ -163,16 +163,16 @@ const CENTROIDS = {
 const ANTARCTICA_ID = "010";
 
 const INITIAL_POSITIONS = {
-  China: { x: 830, y: 215 },
-  India: { x: 780, y: 280 },
-  Rusia: { x: 770, y: 88 },
-  EEUU: { x: 340, y: 165 },
-  "Irán": { x: 590, y: 238 },
-  Indonesia: { x: 855, y: 330 },
-  "Pakistán": { x: 695, y: 210 },
-  Egipto: { x: 530, y: 290 },
-  Qatar: { x: 605, y: 395 },
-  "Arabia Saudita": { x: 565, y: 350 }
+  China: { x: 767, y: 261 },
+  India: { x: 657, y: 352 },
+  Rusia: { x: 753, y: 150 },
+  EEUU: { x: 222, y: 249 },
+  "Irán": { x: 566, y: 240 },
+  Indonesia: { x: 815, y: 361 },
+  "Pakistán": { x: 645, y: 242 },
+  Egipto: { x: 453, y: 279 },
+  Qatar: { x: 559, y: 364 },
+  "Arabia Saudita": { x: 490, y: 327 }
 };
 
 const DEFAULT_DATA = [
@@ -293,6 +293,10 @@ const BADGE_RADIUS = 10;
 const BADGE_BORDER = 1.8013;
 const BADGE_FONT_SIZE = 9.8;
 
+function buildProjection() {
+  return d3.geoMercator();
+}
+
 function resolveOverlaps(positions, data, badgeScale, badgePadding, iterations = 30) {
   const badgeHeight = getBadgeHeight(badgeScale, badgePadding);
   const items = data
@@ -399,6 +403,56 @@ function Slider({ label, value, onChange, min, max, step, unit }) {
   );
 }
 
+function ToggleRow({ label, checked, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        width: "100%",
+        padding: "8px 10px",
+        border: "none",
+        background: "transparent",
+        color: "#666",
+        cursor: "pointer",
+        fontSize: 10,
+        fontWeight: 700,
+        fontFamily: "'DM Sans', sans-serif",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8
+      }}
+    >
+      <span>{label}</span>
+      <span
+        style={{
+          width: 34,
+          height: 20,
+          borderRadius: 999,
+          background: checked ? "#4086FF" : "#d7d7d7",
+          position: "relative",
+          transition: "background 0.2s",
+          flexShrink: 0
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 2,
+            left: checked ? 16 : 2,
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            background: "#fff",
+            transition: "left 0.2s"
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
 function useMapDrag(setMapOffset) {
   const [dragging, setDragging] = useState(false);
   const startRef = useRef({ x: 0, y: 0 });
@@ -450,6 +504,7 @@ function BadgeDraggable({
   badgeScale,
   badgePadding,
   flagScale,
+  badgeFontWeight,
   onDrag,
   posX,
   posY
@@ -513,7 +568,7 @@ function BadgeDraggable({
         x={badgeX + padX + flagBoxW + gap}
         y={badgeY + badgeH / 2 + 0.8}
         fontSize={BADGE_FONT_SIZE * badgeScale}
-        fontWeight={700}
+        fontWeight={badgeFontWeight}
         fill={BADGE_TEXT_COLOR}
         fontFamily="'DM Sans', sans-serif"
         dominantBaseline="central"
@@ -536,6 +591,8 @@ export default function App() {
   const [title, setTitle] = useState("PRINCIPALES PRODUCTORES (*)");
   const [source, setSource] = useState("(*) Fuente: IFA 2024.");
   const [includeMeta, setIncludeMeta] = useState(false);
+  const [includeBackground, setIncludeBackground] = useState(true);
+  const [exportFormat, setExportFormat] = useState("png");
   const [copied, setCopied] = useState(false);
 
   const [strokeWidth, setStrokeWidth] = useState(0.5);
@@ -545,6 +602,7 @@ export default function App() {
   const [badgeScale, setBadgeScale] = useState(0.75);
   const [badgePadding, setBadgePadding] = useState(-1);
   const [flagScale, setFlagScale] = useState(1.4);
+  const [badgeFontWeight, setBadgeFontWeight] = useState(700);
   const [connectorStroke, setConnectorStroke] = useState(0.4);
   const [mapScale, setMapScale] = useState(155);
   const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
@@ -556,7 +614,7 @@ export default function App() {
   const { onMouseDown: onMapMouseDown, dragging: mapDragging } = useMapDrag(setMapOffset);
 
   const projection = useMemo(
-    () => d3.geoNaturalEarth1().scale(mapScale).translate([width / 2 + mapOffset.x, height / 2 + 20 + mapOffset.y]),
+    () => buildProjection().scale(mapScale).translate([width / 2 + mapOffset.x, height / 2 + 20 + mapOffset.y]),
     [mapScale, mapOffset],
   );
   const pathGenerator = useMemo(() => d3.geoPath().projection(projection), [projection]);
@@ -700,7 +758,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "choropleth_map.svg";
+    a.download = "mapa-profertil-urea.svg";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -717,12 +775,16 @@ export default function App() {
     ctx.scale(scale, scale);
     const img = new Image();
     img.onload = () => {
-      ctx.fillStyle = BG_COLOR;
-      ctx.fillRect(0, 0, width, height);
+      if (includeBackground) {
+        ctx.fillStyle = BG_COLOR;
+        ctx.fillRect(0, 0, width, height);
+      } else {
+        ctx.clearRect(0, 0, width, height);
+      }
       ctx.drawImage(img, 0, 0, width, height);
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
-      a.download = "choropleth_map.png";
+      a.download = "mapa-profertil-urea.png";
       a.click();
     };
     img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgStr)))}`;
@@ -738,6 +800,14 @@ export default function App() {
     boxSizing: "border-box"
   };
 
+  const handleExport = () => {
+    if (exportFormat === "svg") {
+      exportSVG();
+      return;
+    }
+    exportPNG();
+  };
+
   return (
     <div
       style={{
@@ -749,100 +819,92 @@ export default function App() {
       }}
     >
       <div
+        className="control-panel"
         style={{
           width: 270,
-          padding: "14px 12px",
           borderRight: "1px solid #e0ddd5",
-          overflowY: "auto",
           background: "#fff",
-          flexShrink: 0
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0
         }}
       >
-        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14, color: "#031A42", letterSpacing: -0.3 }}>
-          Bong Map Tool
-        </div>
-
-        <div style={{ marginBottom: 10 }}>
-          <div
-            style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#bbb", marginBottom: 2 }}
-          >
-            Titulo
-          </div>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: 14 }}>
-          <div
-            style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#bbb", marginBottom: 2 }}
-          >
-            Fuente
-          </div>
-          <input value={source} onChange={(e) => setSource(e.target.value)} style={inputStyle} />
-        </div>
-
         <div
-          style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#bbb", marginBottom: 6 }}
-        >
-          Controles visuales
-        </div>
-        <div style={{ background: "#fafaf8", borderRadius: 8, padding: "10px 10px 2px", marginBottom: 6, border: "1px solid #f0ede5" }}>
-          <Slider label="Escala mapa" value={mapScale} onChange={setMapScale} min={80} max={400} step={5} unit="" />
-          <Slider label="Stroke mapa" value={strokeWidth} onChange={setStrokeWidth} min={0} max={2} step={0.1} unit="px" />
-          <Slider label="Tamano %" value={pctSize} onChange={setPctSize} min={6} max={28} step={1} unit="px" />
-          <Slider label="Linea conector" value={connectorStroke} onChange={setConnectorStroke} min={0} max={2} step={0.1} unit="px" />
-          <details style={{ marginBottom: 10 }}>
-            <summary
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: "#4b5563",
-                cursor: "pointer",
-                listStyle: "none",
-                marginBottom: 8,
-                padding: "8px 10px",
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                background: "#fff",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                userSelect: "none"
-              }}
-            >
-              <span style={{ fontSize: 11, lineHeight: 1, color: "#6b7280" }}>▸</span>
-              <span>Ajustes badge</span>
-            </summary>
-            <Slider label="Escala badge" value={badgeScale} onChange={setBadgeScale} min={0.6} max={1.4} step={0.05} unit="x" />
-            <Slider label="Padding badge" value={badgePadding} onChange={setBadgePadding} min={-2} max={10} step={1} unit="px" />
-            <Slider label="Escala bandera" value={flagScale} onChange={setFlagScale} min={0.6} max={1.4} step={0.05} unit="x" />
-            <Slider label="Radio badge" value={badgeRadius} onChange={setBadgeRadius} min={2} max={14} step={1} unit="px" />
-            <Slider label="Stroke badge" value={badgeStroke} onChange={setBadgeStroke} min={0} max={2} step={0.1} unit="px" />
-          </details>
-        </div>
-
-        <button
-          onClick={() => setMapOffset({ x: 0, y: 0 })}
+          className="control-panel-scroll"
           style={{
-            width: "100%",
-            padding: "5px",
-            border: "1px solid #e0e0e0",
-            borderRadius: 5,
-            background: "#fafaf8",
-            fontSize: 9,
-            fontWeight: 600,
-            color: "#666",
-            cursor: "pointer",
-            fontFamily: "'DM Sans', sans-serif",
-            marginBottom: 4
+            flex: 1,
+            overflowY: "auto",
+            minHeight: 0,
+            padding: "14px 12px 10px"
           }}
         >
-          Reset posicion mapa
-        </button>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14, color: "#031A42", letterSpacing: -0.3 }}>
+            Bong Map Tool
+          </div>
 
-        <div style={{ display: "flex", gap: 3, marginBottom: 14 }}>
+          <div style={{ marginBottom: 10 }}>
+            <div
+              style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#bbb", marginBottom: 2 }}
+            >
+              Titulo
+            </div>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <div
+              style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#bbb", marginBottom: 2 }}
+            >
+              Fuente
+            </div>
+            <input value={source} onChange={(e) => setSource(e.target.value)} style={inputStyle} />
+          </div>
+
+          <div
+            style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#bbb", marginBottom: 6 }}
+          >
+            Controles visuales
+          </div>
+          <div style={{ background: "#fafaf8", borderRadius: 8, padding: "10px 10px 2px", marginBottom: 6, border: "1px solid #f0ede5" }}>
+            <Slider label="Escala mapa" value={mapScale} onChange={setMapScale} min={80} max={400} step={5} unit="" />
+            <Slider label="Stroke mapa" value={strokeWidth} onChange={setStrokeWidth} min={0} max={2} step={0.1} unit="px" />
+            <Slider label="Tamano %" value={pctSize} onChange={setPctSize} min={6} max={28} step={1} unit="px" />
+            <Slider label="Linea conector" value={connectorStroke} onChange={setConnectorStroke} min={0} max={2} step={0.1} unit="px" />
+            <details style={{ marginBottom: 10 }}>
+              <summary
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#4b5563",
+                  cursor: "pointer",
+                  listStyle: "none",
+                  marginBottom: 8,
+                  padding: "8px 10px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  background: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  userSelect: "none"
+                }}
+              >
+                <span style={{ fontSize: 11, lineHeight: 1, color: "#6b7280" }}>▸</span>
+                <span>Ajustes badge</span>
+              </summary>
+              <Slider label="Escala badge" value={badgeScale} onChange={setBadgeScale} min={0.6} max={1.4} step={0.05} unit="x" />
+              <Slider label="Padding badge" value={badgePadding} onChange={setBadgePadding} min={-2} max={10} step={1} unit="px" />
+              <Slider label="Escala bandera" value={flagScale} onChange={setFlagScale} min={0.6} max={1.4} step={0.05} unit="x" />
+              <Slider label="Peso fuente" value={badgeFontWeight} onChange={setBadgeFontWeight} min={400} max={800} step={50} unit="" />
+              <Slider label="Radio badge" value={badgeRadius} onChange={setBadgeRadius} min={2} max={14} step={1} unit="px" />
+              <Slider label="Stroke badge" value={badgeStroke} onChange={setBadgeStroke} min={0} max={2} step={0.1} unit="px" />
+            </details>
+          </div>
+
           <button
-            onClick={handleResolveOverlaps}
+            onClick={() => setMapOffset({ x: 0, y: 0 })}
             style={{
-              flex: 1,
+              width: "100%",
               padding: "5px",
               border: "1px solid #e0e0e0",
               borderRadius: 5,
@@ -851,30 +913,50 @@ export default function App() {
               fontWeight: 600,
               color: "#666",
               cursor: "pointer",
-              fontFamily: "'DM Sans', sans-serif"
-            }}
-          >
-            Resolver overlap
-          </button>
-          <button
-            onClick={handleCopyPositions}
-            style={{
-              flex: 1,
-              padding: "5px",
-              border: "1px solid #e0e0e0",
-              borderRadius: 5,
-              background: copied ? "#2D8035" : "#fafaf8",
-              fontSize: 9,
-              fontWeight: 600,
-              color: copied ? "white" : "#666",
-              cursor: "pointer",
               fontFamily: "'DM Sans', sans-serif",
-              transition: "all 0.2s"
+              marginBottom: 4
             }}
           >
-            {copied ? "Copiado" : "Copiar posiciones"}
+            Reset posicion mapa
           </button>
-        </div>
+
+          <div style={{ display: "flex", gap: 3, marginBottom: 14 }}>
+            <button
+              onClick={handleResolveOverlaps}
+              style={{
+                flex: 1,
+                padding: "5px",
+                border: "1px solid #e0e0e0",
+                borderRadius: 5,
+                background: "#fafaf8",
+                fontSize: 9,
+                fontWeight: 600,
+                color: "#666",
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif"
+              }}
+            >
+              Resolver overlap
+            </button>
+            <button
+              onClick={handleCopyPositions}
+              style={{
+                flex: 1,
+                padding: "5px",
+                border: "1px solid #e0e0e0",
+                borderRadius: 5,
+                background: copied ? "#2D8035" : "#fafaf8",
+                fontSize: 9,
+                fontWeight: 600,
+                color: copied ? "white" : "#666",
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+                transition: "all 0.2s"
+              }}
+            >
+              {copied ? "Copiado" : "Copiar posiciones"}
+            </button>
+          </div>
 
         <div
           style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#bbb", marginBottom: 6 }}
@@ -887,7 +969,7 @@ export default function App() {
           <div style={{ width: 18 }} />
         </div>
 
-        {data.map((d, i) => {
+          {data.map((d, i) => {
           const info = COUNTRY_DB[d.country];
           const suggestions = activeCountryRow === i ? getCountrySuggestions(d.country) : [];
           return (
@@ -1000,111 +1082,123 @@ export default function App() {
               </button>
             </div>
           );
-        })}
+          })}
 
-        <button
-          onClick={addRow}
-          style={{
-            width: "100%",
-            padding: "4px",
-            border: "1px dashed #ddd",
-            borderRadius: 4,
-            background: "transparent",
-            fontSize: 10,
-            color: "#bbb",
-            cursor: "pointer",
-            fontFamily: "'DM Sans', sans-serif",
-            marginTop: 3,
-            marginBottom: 14
-          }}
-        >
-          + Agregar pais
-        </button>
-
-        <div style={{ display: "flex", gap: 4 }}>
           <button
-            onClick={exportSVG}
+            onClick={addRow}
             style={{
-              flex: 1,
-              padding: "8px",
-              border: "none",
-              borderRadius: 6,
-              background: "#4086FF",
-              color: "white",
-              fontSize: 11,
-              fontWeight: 700,
+              width: "100%",
+              padding: "4px",
+              border: "1px dashed #ddd",
+              borderRadius: 4,
+              background: "transparent",
+              fontSize: 10,
+              color: "#bbb",
               cursor: "pointer",
-              fontFamily: "'DM Sans', sans-serif"
+              fontFamily: "'DM Sans', sans-serif",
+              marginTop: 3,
+              marginBottom: 14
             }}
           >
-            Exportar SVG
-          </button>
-          <button
-            onClick={exportPNG}
-            style={{
-              flex: 1,
-              padding: "8px",
-              border: "none",
-              borderRadius: 6,
-              background: "#2D8035",
-              color: "white",
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: "pointer",
-              fontFamily: "'DM Sans', sans-serif"
-            }}
-          >
-            Exportar PNG
+            + Agregar pais
           </button>
         </div>
 
-        <button
-          onClick={() => setIncludeMeta((prev) => !prev)}
+        <div
+          className="control-panel-footer"
           style={{
-            width: "100%",
-            marginTop: 8,
-            padding: "8px 10px",
-            border: "1px solid #e0e0e0",
-            borderRadius: 8,
-            background: "#fafaf8",
-            color: "#666",
-            cursor: "pointer",
-            fontSize: 10,
-            fontWeight: 700,
-            fontFamily: "'DM Sans', sans-serif",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between"
+            padding: "10px 12px 14px",
+            borderTop: "1px solid #ece7dd",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.88) 0%, #ffffff 18%)",
+            backdropFilter: "blur(8px)"
           }}
         >
-          <span>Incluir titulo y fuente</span>
-          <span
+          <div
             style={{
-              width: 34,
-              height: 20,
-              borderRadius: 999,
-              background: includeMeta ? "#4086FF" : "#d7d7d7",
-              position: "relative",
-              transition: "background 0.2s"
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              background: "#fafaf8",
+              overflow: "hidden"
             }}
           >
-            <span
+            <div
               style={{
-                position: "absolute",
-                top: 2,
-                left: includeMeta ? 16 : 2,
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                background: "#fff",
-                transition: "left 0.2s"
+                padding: "7px 10px 6px",
+                fontSize: 8,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: 1,
+                color: "#b0b0b0",
+                borderBottom: "1px solid #ececec"
               }}
-            />
-          </span>
-        </button>
+            >
+              Exportacion
+            </div>
+            <ToggleRow label="Incluir titulo y fuente" checked={includeMeta} onToggle={() => setIncludeMeta((prev) => !prev)} />
+            <div style={{ height: 1, background: "#ececec" }} />
+            <ToggleRow label="Incluir fondo" checked={includeBackground} onToggle={() => setIncludeBackground((prev) => !prev)} />
+          </div>
 
-        <div style={{ fontSize: 8, color: "#ccc", marginTop: 8, lineHeight: 1.5 }}>
-          Banderas: Emoji One v1 (CC BY-SA 4.0). Arrastra el mapa para panear y las etiquetas para reposicionar.
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            <button
+              onClick={handleExport}
+              style={{
+                flex: 1,
+                padding: "9px 10px",
+                border: "none",
+                borderRadius: 8,
+                background: exportFormat === "png" ? "#2D8035" : "#4086FF",
+                color: "white",
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+                letterSpacing: 0.2
+              }}
+            >
+              {exportFormat === "png" ? "EXPORTAR PNG" : "EXPORTAR SVG"}
+            </button>
+            <div
+              style={{
+                display: "flex",
+                padding: 2,
+                borderRadius: 8,
+                background: "#eef2f7",
+                border: "1px solid #dbe2ea",
+                flexShrink: 0
+              }}
+            >
+              {["png", "svg"].map((format) => {
+                const active = exportFormat === format;
+                return (
+                  <button
+                    key={format}
+                    type="button"
+                    onClick={() => setExportFormat(format)}
+                    style={{
+                      minWidth: 44,
+                      padding: "7px 10px",
+                      border: "none",
+                      borderRadius: 6,
+                      background: active ? "#ffffff" : "transparent",
+                      color: active ? "#031A42" : "#6b7280",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                      boxShadow: active ? "0 1px 2px rgba(3, 26, 66, 0.08)" : "none"
+                    }}
+                  >
+                    {format.toUpperCase()}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ fontSize: 8, color: "#ccc", marginTop: 8, lineHeight: 1.5 }}>
+            Banderas: Emoji One v1 (CC BY-SA 4.0). Arrastra el mapa para panear y las etiquetas para reposicionar.
+          </div>
         </div>
       </div>
 
@@ -1118,7 +1212,7 @@ export default function App() {
             style={{
               width: "100%",
               maxHeight: "100%",
-              background: BG_COLOR,
+              background: includeBackground ? BG_COLOR : "transparent",
               borderRadius: 6,
               cursor: mapDragging ? "grabbing" : "default"
             }}
@@ -1126,7 +1220,7 @@ export default function App() {
             xmlnsXlink="http://www.w3.org/1999/xlink"
             onMouseDown={onMapMouseDown}
           >
-            <rect x={0} y={0} width={width} height={height} fill={BG_COLOR} />
+            {includeBackground && <rect x={0} y={0} width={width} height={height} fill={BG_COLOR} />}
 
             <g>
               {geoData.features.map((feature, i) => {
@@ -1238,6 +1332,7 @@ export default function App() {
                       badgeScale={badgeScale}
                       badgePadding={badgePadding}
                       flagScale={flagScale}
+                      badgeFontWeight={badgeFontWeight}
                       onDrag={handleLabelDrag(d.country)}
                       posX={pos.x}
                       posY={pos.y}
