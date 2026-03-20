@@ -1,34 +1,49 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as d3 from "d3";
 
-// Inline flag SVGs as base64 data URIs (Emoji One v1, CC BY-SA 4.0)
-const FLAG_DATA = {
-  "flag-for-china": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0RFMjkxMCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4Ii8+PGcgZmlsbD0iI0ZGREUwMCI+PHBvbHlnb24gcG9pbnRzPSIxMiw4IDEzLjgsMTMuNSAxOS42LDEzLjUgMTQuOSwxNyAxNi43LDIyLjUgMTIsMTkgNy4zLDIyLjUgOS4xLDE3IDQuNCwxMy41IDEwLjIsMTMuNSIvPjxwb2x5Z29uIHBvaW50cz0iMjQsNCAyNSw2LjIgMjcuNCw2LjIgMjUuNSw3LjYgMjYuMyw5LjggMjQsOC4yIDIxLjcsOS44IDIyLjUsNy42IDIwLjYsNi4yIDIzLDYuMiIvPjxwb2x5Z29uIHBvaW50cz0iMjgsOSAyOSwxMS4yIDMxLjQsMTEuMiAyOS41LDEyLjYgMzAuMywxNC44IDI4LDEzLjIgMjUuNywxNC44IDI2LjUsMTIuNiAyNC42LDExLjIgMjcsMTEuMiIvPjxwb2x5Z29uIHBvaW50cz0iMjgsMTYgMjksMTguMiAzMS40LDE4LjIgMjkuNSwxOS42IDMwLjMsMjEuOCAyOCwyMC4yIDI1LjcsMjEuOCAyNi41LDE5LjYgMjQuNiwxOC4yIDI3LDE4LjIiLz48cG9seWdvbiBwb2ludHM9IjI0LDIxIDI1LDIzLjIgMjcuNCwyMy4yIDI1LjUsMjQuNiAyNi4zLDI2LjggMjQsMjUuMiAyMS43LDI2LjggMjIuNSwyNC42IDIwLjYsMjMuMiAyMywyMy4yIi8+PC9nPjwvc3ZnPg==",
-  "flag-for-india": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0ZGOTkzMyIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHk9IjE2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTYiLz48cmVjdCBmaWxsPSIjMTM4ODA4IiB5PSIzMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PGNpcmNsZSBjeD0iMzIiIGN5PSIyNCIgcj0iNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwMDgwIiBzdHJva2Utd2lkdGg9IjAuOCIvPjxjaXJjbGUgY3g9IjMyIiBjeT0iMjQiIHI9IjEiIGZpbGw9IiMwMDAwODAiLz48L3N2Zz4=",
-  "flag-for-russia": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0id2hpdGUiIHdpZHRoPSI2NCIgaGVpZ2h0PSIxNiIvPjxyZWN0IGZpbGw9IiMwMDM5QTYiIHk9IjE2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTYiLz48cmVjdCBmaWxsPSIjRDUyQjFFIiB5PSIzMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PC9zdmc+",
-  "flag-for-united-states": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0IyMjIzNCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4Ii8+PGcgZmlsbD0id2hpdGUiPjxyZWN0IHk9IjMuNyIgd2lkdGg9IjY0IiBoZWlnaHQ9IjMuNyIvPjxyZWN0IHk9IjExLjEiIHdpZHRoPSI2NCIgaGVpZ2h0PSIzLjciLz48cmVjdCB5PSIxOC41IiB3aWR0aD0iNjQiIGhlaWdodD0iMy43Ii8+PHJlY3QgeT0iMjUuOCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjMuNyIvPjxyZWN0IHk9IjMzLjIiIHdpZHRoPSI2NCIgaGVpZ2h0PSIzLjciLz48cmVjdCB5PSI0MC42IiB3aWR0aD0iNjQiIGhlaWdodD0iMy43Ii8+PC9nPjxyZWN0IGZpbGw9IiMzQzNCNkUiIHdpZHRoPSIyNS42IiBoZWlnaHQ9IjI1LjgiLz48ZyBmaWxsPSJ3aGl0ZSI+PGNpcmNsZSBjeD0iNCIgY3k9IjQiIHI9IjEuMiIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iNCIgcj0iMS4yIi8+PGNpcmNsZSBjeD0iMjAiIGN5PSI0IiByPSIxLjIiLz48Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iMS4yIi8+PGNpcmNsZSBjeD0iMTYiIGN5PSI4IiByPSIxLjIiLz48Y2lyY2xlIGN4PSI0IiBjeT0iMTIiIHI9IjEuMiIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEuMiIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMTIiIHI9IjEuMiIvPjxjaXJjbGUgY3g9IjgiIGN5PSIxNiIgcj0iMS4yIi8+PGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMS4yIi8+PGNpcmNsZSBjeD0iNCIgY3k9IjIwIiByPSIxLjIiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjIwIiByPSIxLjIiLz48Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIxLjIiLz48L2c+PC9zdmc+",
-  "flag-for-iran": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iIzIzOUY0MCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHk9IjE2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTYiLz48cmVjdCBmaWxsPSIjREEwMDAwIiB5PSIzMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PGNpcmNsZSBjeD0iMzIiIGN5PSIyNCIgcj0iNSIgZmlsbD0iI0RBMDAwMCIvPjwvc3ZnPg==",
-  "flag-for-indonesia": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0ZGMDAwMCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjI0Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHk9IjI0IiB3aWR0aD0iNjQiIGhlaWdodD0iMjQiLz48L3N2Zz4=",
-  "flag-for-pakistan": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0id2hpdGUiIHdpZHRoPSIxNiIgaGVpZ2h0PSI0OCIvPjxyZWN0IGZpbGw9IiMwMTQxMUMiIHg9IjE2IiB3aWR0aD0iNDgiIGhlaWdodD0iNDgiLz48Y2lyY2xlIGN4PSIzNiIgY3k9IjI0IiByPSI5IiBmaWxsPSIjMDE0MTFDIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxjaXJjbGUgY3g9IjM4IiBjeT0iMjQiIHI9IjcuNSIgZmlsbD0iIzAxNDExQyIvPjxwb2x5Z29uIHBvaW50cz0iNDIsMTggNDMsMjEgNDYsMjEgNDMuNSwyMyA0NC41LDI2IDQyLDI0IDM5LjUsMjYgNDAuNSwyMyAzOCwyMSA0MSwyMSIgZmlsbD0id2hpdGUiLz48L3N2Zz4=",
-  "flag-for-egypt": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0NFMTEyNiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHk9IjE2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTYiLz48cmVjdCBmaWxsPSIjMTExIiB5PSIzMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PHBhdGggZD0iTTI4LDIwIEwzMiwyNiBMMzYsMjAgWiIgZmlsbD0iI0MwOTMwMCIgb3BhY2l0eT0iMC44Ii8+PC9zdmc+",
-  "flag-for-qatar": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0id2hpdGUiIHdpZHRoPSIyMCIgaGVpZ2h0PSI0OCIvPjxyZWN0IGZpbGw9IiM4QTE1MzgiIHg9IjIwIiB3aWR0aD0iNDQiIGhlaWdodD0iNDgiLz48cG9seWdvbiBmaWxsPSJ3aGl0ZSIgcG9pbnRzPSIyMCwwIDI4LDQuOCAyMCw5LjYgMjgsMTQuNCAyMCwxOS4yIDI4LDI0IDIwLDI4LjggMjgsMzMuNiAyMCwzOC40IDI4LDQzLjIgMjAsNDgiLz48L3N2Zz4=",
-  "flag-for-saudi-arabia": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iIzAwNkMzNSIgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4Ii8+PHJlY3QgeD0iMTgiIHk9IjI4IiB3aWR0aD0iMjgiIGhlaWdodD0iMS41IiByeD0iMC41IiBmaWxsPSJ3aGl0ZSIvPjxyZWN0IHg9IjIyIiB5PSIxNCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjgiIHJ4PSIxIiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC40Ii8+PC9zdmc+",
-  "flag-for-canada": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0ZGMDAwMCIgd2lkdGg9IjE2IiBoZWlnaHQ9IjQ4Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHg9IjE2IiB3aWR0aD0iMzIiIGhlaWdodD0iNDgiLz48cmVjdCBmaWxsPSIjRkYwMDAwIiB4PSI0OCIgd2lkdGg9IjE2IiBoZWlnaHQ9IjQ4Ii8+PHBhdGggZD0iTTMyLDE0IEwzNCwyMCBMMzAsMTggTDI4LDIyIEwyNywxOCBMMjQsMjAgTDI2LDE2IEwyMiwxNiBMMjgsMTQgTDI2LDExIEwzMiwxNFogTTMyLDE0IEwzMCwyMCBMMzQsMTggTDM2LDIyIEwzNywxOCBMNDAsMjAgTDM4LDE2IEw0MiwxNiBMMzYsMTQgTDM4LDExIEwzMiwxNFoiIGZpbGw9IiNGRjAwMDAiLz48L3N2Zz4=",
-  "flag-for-brazil": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iIzAwOUIzQSIgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4Ii8+PHBvbHlnb24gZmlsbD0iI0ZFREYwMCIgcG9pbnRzPSIzMiw2IDU4LDI0IDMyLDQyIDYsMjQiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjI0IiByPSI4IiBmaWxsPSIjMDAyNzc2Ii8+PHBhdGggZD0iTTI0LDI0IFEzMiwyMCA0MCwyNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+",
-  "flag-for-argentina": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iIzc0QUNERiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHk9IjE2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTYiLz48cmVjdCBmaWxsPSIjNzRBQ0RGIiB5PSIzMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PGNpcmNsZSBjeD0iMzIiIGN5PSIyNCIgcj0iNCIgZmlsbD0iI0Y2QjQwRSIvPjwvc3ZnPg==",
-  "flag-for-turkey": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0UzMEExNyIgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4Ii8+PGNpcmNsZSBjeD0iMjQiIGN5PSIyNCIgcj0iOSIgZmlsbD0id2hpdGUiLz48Y2lyY2xlIGN4PSIyNyIgY3k9IjI0IiByPSI3LjIiIGZpbGw9IiNFMzBBMTciLz48cG9seWdvbiBwb2ludHM9IjM2LDI0IDM4LDIxIDM1LDIzIDM5LDIzIDM2LDIxIiBmaWxsPSJ3aGl0ZSIgdHJhbnNmb3JtPSJzY2FsZSgxLjUpIHRyYW5zbGF0ZSgtMTIsLTgpIi8+PC9zdmc+",
-  "flag-for-australia": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iIzAwMDA4QiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4Ii8+PGcgZmlsbD0id2hpdGUiPjxwb2x5Z29uIHBvaW50cz0iMTAsMzQgMTEsMzcgMTQsMzcgMTEuNSwzOSAxMi41LDQyIDEwLDQwIDcuNSw0MiA4LjUsMzkgNiwzNyA5LDM3Ii8+PHBvbHlnb24gcG9pbnRzPSI0OCwxNCA0OSwxNiA1MSwxNiA0OS41LDE3LjUgNTAsMTkuNSA0OCwxOCA0NiwxOS41IDQ2LjUsMTcuNSA0NSwxNiA0NywxNiIvPjxwb2x5Z29uIHBvaW50cz0iNTQsMjQgNTUsMjYgNTcsMjYgNTUuNSwyNy41IDU2LDI5LjUgNTQsMjggNTIsMjkuNSA1Mi41LDI3LjUgNTEsMjYgNTMsMjYiLz48cG9seWdvbiBwb2ludHM9IjQ4LDM0IDQ5LDM2IDUxLDM2IDQ5LjUsMzcuNSA1MCwzOS41IDQ4LDM4IDQ2LDM5LjUgNDYuNSwzNy41IDQ1LDM2IDQ3LDM2Ii8+PHBvbHlnb24gcG9pbnRzPSI0MiwyOCA0MywzMCA0NSwzMCA0My41LDMxLjUgNDQsMzMuNSA0MiwzMiA0MCwzMy41IDQwLjUsMzEuNSAzOSwzMCA0MSwzMCIvPjwvZz48L3N2Zz4=",
-  "flag-for-thailand": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0E1MTkzMSIgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHk9IjgiIHdpZHRoPSI2NCIgaGVpZ2h0PSIzMiIvPjxyZWN0IGZpbGw9IiMyRDJBNEEiIHk9IjE2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTYiLz48L3N2Zz4=",
-  "flag-for-nigeria": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iIzAwODc1MSIgd2lkdGg9IjIxLjMiIGhlaWdodD0iNDgiLz48cmVjdCBmaWxsPSJ3aGl0ZSIgeD0iMjEuMyIgd2lkdGg9IjIxLjQiIGhlaWdodD0iNDgiLz48cmVjdCBmaWxsPSIjMDA4NzUxIiB4PSI0Mi43IiB3aWR0aD0iMjEuMyIgaGVpZ2h0PSI0OCIvPjwvc3ZnPg==",
-  "flag-for-algeria": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iIzAwNjIzMyIgd2lkdGg9IjMyIiBoZWlnaHQ9IjQ4Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHg9IjMyIiB3aWR0aD0iMzIiIGhlaWdodD0iNDgiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjI0IiByPSI5IiBmaWxsPSIjRDIxMDM0Ii8+PGNpcmNsZSBjeD0iMzUiIGN5PSIyNCIgcj0iNy41IiBmaWxsPSJ3aGl0ZSIvPjxwb2x5Z29uIHBvaW50cz0iMzYsMTggMzcuNSwyMiAzNCwyMiIgZmlsbD0iI0QyMTAzNCIvPjwvc3ZnPg==",
-  "flag-for-mexico": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iIzAwNjg0NyIgd2lkdGg9IjIxLjMiIGhlaWdodD0iNDgiLz48cmVjdCBmaWxsPSJ3aGl0ZSIgeD0iMjEuMyIgd2lkdGg9IjIxLjQiIGhlaWdodD0iNDgiLz48cmVjdCBmaWxsPSIjQ0UxMTI2IiB4PSI0Mi43IiB3aWR0aD0iMjEuMyIgaGVpZ2h0PSI0OCIvPjwvc3ZnPg==",
-  "flag-for-colombia": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0ZDRDExNiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjI0Ii8+PHJlY3QgZmlsbD0iIzAwMzg5MyIgeT0iMjQiIHdpZHRoPSI2NCIgaGVpZ2h0PSIxMiIvPjxyZWN0IGZpbGw9IiNDRTExMjYiIHk9IjM2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTIiLz48L3N2Zz4=",
-  "flag-for-uruguay": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0id2hpdGUiIHdpZHRoPSI2NCIgaGVpZ2h0PSI0OCIvPjxnIGZpbGw9IiMwMDM4QTgiPjxyZWN0IHk9IjUuMyIgd2lkdGg9IjY0IiBoZWlnaHQ9IjUuMyIvPjxyZWN0IHk9IjE2IiB3aWR0aD0iNjQiIGhlaWdodD0iNS4zIi8+PHJlY3QgeT0iMjYuNyIgd2lkdGg9IjY0IiBoZWlnaHQ9IjUuMyIvPjxyZWN0IHk9IjM3LjMiIHdpZHRoPSI2NCIgaGVpZ2h0PSI1LjMiLz48L2c+PHJlY3QgZmlsbD0id2hpdGUiIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjUiIGZpbGw9IiNGQ0QxMTYiLz48L3N2Zz4=",
-  "flag-for-ecuador": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0ZGRDEwMCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjI0Ii8+PHJlY3QgZmlsbD0iIzAwMzNBMCIgeT0iMjQiIHdpZHRoPSI2NCIgaGVpZ2h0PSIxMiIvPjxyZWN0IGZpbGw9IiNDRTExMjYiIHk9IjM2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTIiLz48L3N2Zz4=",
-  "flag-for-paraguay": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3QgZmlsbD0iI0Q1MkIxRSIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PHJlY3QgZmlsbD0id2hpdGUiIHk9IjE2IiB3aWR0aD0iNjQiIGhlaWdodD0iMTYiLz48cmVjdCBmaWxsPSIjMDAzOEE4IiB5PSIzMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjE2Ii8+PGNpcmNsZSBjeD0iMzIiIGN5PSIyNCIgcj0iNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzMzIiBzdHJva2Utd2lkdGg9IjAuNSIvPjwvc3ZnPg=="
+const ICONIFY_PREFIX = "emojione-v1";
+const FLAG_ICON_NAMES = {
+  "flag-for-china": "flag-for-china",
+  "flag-for-india": "flag-for-india",
+  "flag-for-russia": "flag-for-russia",
+  "flag-for-united-states": "flag-for-united-states",
+  "flag-for-iran": "flag-for-iran",
+  "flag-for-indonesia": "flag-for-indonesia",
+  "flag-for-pakistan": "flag-for-pakistan",
+  "flag-for-egypt": "flag-for-egypt",
+  "flag-for-qatar": "flag-for-qatar",
+  "flag-for-saudi-arabia": "flag-for-saudi-arabia",
+  "flag-for-canada": "flag-for-canada",
+  "flag-for-brazil": "flag-for-brazil",
+  "flag-for-argentina": "flag-for-argentina",
+  "flag-for-turkey": "flag-for-turkey",
+  "flag-for-australia": "flag-for-australia",
+  "flag-for-thailand": "flag-for-thailand",
+  "flag-for-nigeria": "flag-for-nigeria",
+  "flag-for-algeria": "flag-for-algeria",
+  "flag-for-mexico": "flag-for-mexico",
+  "flag-for-colombia": "flag-for-colombia",
+  "flag-for-uruguay": "flag-for-uruguay",
+  "flag-for-ecuador": "flag-for-ecuador",
+  "flag-for-paraguay": "flag-for-paraguay"
 };
 
-const flagUrl = (iconName) => FLAG_DATA[iconName] || "";
+const FALLBACK_FLAG_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48"><rect width="64" height="48" rx="6" fill="#e5e7eb"/><path d="M8 36V12l12 8 12-8 12 8 12-8v24H8Z" fill="#cbd5e1"/><circle cx="22" cy="18" r="5" fill="#94a3b8"/></svg>',
+)}`;
+
+const flagUrl = (iconName, loadedFlags) => loadedFlags[iconName] || FALLBACK_FLAG_URL;
+
+async function fetchFlagDataUri(iconName) {
+  const slug = FLAG_ICON_NAMES[iconName];
+  if (!slug) return FALLBACK_FLAG_URL;
+  const response = await fetch(`https://api.iconify.design/${ICONIFY_PREFIX}/${slug}.svg`);
+  if (!response.ok) {
+    throw new Error(`Failed to load flag ${iconName}`);
+  }
+  const svg = await response.text();
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
 
 const COUNTRY_DB = {
   China: { id: "156", icon: "flag-for-china" },
@@ -200,19 +215,40 @@ function decodeTopojson(topo, objectName) {
   };
 }
 
-function estimateBadgeWidth(country) {
-  return 8 + 24 + 6 + country.length * 7.5 + 6 + 8 + 4;
+function estimateBadgeWidth(country, badgeScale, badgePadding) {
+  return (
+    (BADGE_LEFT_PAD + badgePadding) +
+    BADGE_FLAG_W * badgeScale +
+    BADGE_TEXT_GAP +
+    country.length * (8.4 * badgeScale) +
+    (BADGE_RIGHT_PAD + badgePadding)
+  );
 }
 
-const BADGE_H = 28;
-const BADGE_PAD = 6;
+function getBadgeHeight(badgeScale, badgePadding) {
+  return BADGE_H * badgeScale + badgePadding * 2;
+}
 
-function resolveOverlaps(positions, data, iterations = 30) {
+const BADGE_H = 42;
+const BADGE_PAD = 8;
+const BADGE_TEXT_COLOR = "#4086FF";
+const BADGE_FLAG_W = 38;
+const BADGE_FLAG_H = 26;
+const BADGE_FLAG_RADIUS = 8;
+const BADGE_LEFT_PAD = 6;
+const BADGE_RIGHT_PAD = 9;
+const BADGE_TEXT_GAP = 3;
+const BADGE_RADIUS = 10;
+const BADGE_BORDER = 1.8013;
+const BADGE_FONT_SIZE = 9.8;
+
+function resolveOverlaps(positions, data, badgeScale, badgePadding, iterations = 30) {
+  const badgeHeight = getBadgeHeight(badgeScale, badgePadding);
   const items = data
     .map((d) => {
       const pos = positions[d.country];
       if (!pos) return null;
-      return { country: d.country, x: pos.x, y: pos.y, w: estimateBadgeWidth(d.country), h: BADGE_H };
+      return { country: d.country, x: pos.x, y: pos.y, w: estimateBadgeWidth(d.country, badgeScale, badgePadding), h: badgeHeight };
     })
     .filter(Boolean);
 
@@ -266,22 +302,21 @@ function resolveOverlaps(positions, data, iterations = 30) {
   return result;
 }
 
-function FlagIcon({ icon, x, y, w, h }) {
+function FlagIcon({ icon, flagData, x, y, w, h }) {
   const clipId = `flag-${icon}-${Math.round(x)}-${Math.round(y)}`;
   return (
     <g>
       <defs>
         <clipPath id={clipId}>
-          <rect x={x} y={y} width={w} height={h} rx={4} ry={4} />
+          <rect x={x} y={y} width={w} height={h} rx={BADGE_FLAG_RADIUS} ry={BADGE_FLAG_RADIUS} />
         </clipPath>
       </defs>
-      <rect x={x} y={y} width={w} height={h} rx={4} ry={4} fill="#f0f0f0" />
       <image
-        href={flagUrl(icon)}
-        x={x + 1}
-        y={y + 1}
-        width={w - 2}
-        height={h - 2}
+        href={flagUrl(icon, flagData)}
+        x={x}
+        y={y}
+        width={w}
+        height={h}
         preserveAspectRatio="xMidYMid meet"
         clipPath={`url(#${clipId})`}
       />
@@ -354,11 +389,23 @@ function useMapDrag(setMapOffset) {
   return { onMouseDown, dragging };
 }
 
-function BadgeDraggable({ country, icon, badgeRadius, badgeStroke, onDrag, posX, posY }) {
+function BadgeDraggable({
+  country,
+  icon,
+  flagData,
+  badgeRadius,
+  badgeStroke,
+  badgeScale,
+  badgePadding,
+  flagScale,
+  onDrag,
+  posX,
+  posY
+}) {
   const [dragging, setDragging] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const textRef = useRef(null);
-  const [textW, setTextW] = useState(60);
+  const [textW, setTextW] = useState(58);
 
   useEffect(() => {
     if (textRef.current) setTextW(textRef.current.getBBox().width);
@@ -383,14 +430,18 @@ function BadgeDraggable({ country, icon, badgeRadius, badgeStroke, onDrag, posX,
     };
   }, [dragging, offset, onDrag]);
 
-  const padX = 8;
-  const flagW = 24;
-  const flagH = 18;
-  const gap = 6;
-  const totalW = padX + flagW + gap + textW + padX + 4;
-  const badgeH = BADGE_H;
+  const padX = BADGE_LEFT_PAD + badgePadding;
+  const flagBoxW = BADGE_FLAG_W * badgeScale;
+  const flagBoxH = BADGE_FLAG_H * badgeScale;
+  const flagW = flagBoxW * flagScale;
+  const flagH = flagBoxH * flagScale;
+  const gap = BADGE_TEXT_GAP;
+  const totalW = padX + flagBoxW + gap + textW + (BADGE_RIGHT_PAD + badgePadding);
+  const badgeH = getBadgeHeight(badgeScale, badgePadding);
   const badgeX = -totalW / 2;
-  const badgeY = -badgeH - 2;
+  const badgeY = -badgeH;
+  const flagX = badgeX + padX + (flagBoxW - flagW) / 2;
+  const flagY = badgeY + (badgeH - flagH) / 2;
 
   return (
     <g onMouseDown={handleMouseDown} style={{ cursor: dragging ? "grabbing" : "grab" }}>
@@ -404,14 +455,14 @@ function BadgeDraggable({ country, icon, badgeRadius, badgeStroke, onDrag, posX,
         stroke={BADGE_STROKE_COLOR}
         strokeWidth={badgeStroke}
       />
-      <FlagIcon icon={icon} x={badgeX + padX} y={badgeY + (badgeH - flagH) / 2} w={flagW} h={flagH} />
+      <FlagIcon icon={icon} flagData={flagData} x={flagX} y={flagY} w={flagW} h={flagH} />
       <text
         ref={textRef}
-        x={badgeX + padX + flagW + gap}
-        y={badgeY + badgeH / 2 + 1}
-        fontSize={11}
+        x={badgeX + padX + flagBoxW + gap}
+        y={badgeY + badgeH / 2 + 0.8}
+        fontSize={BADGE_FONT_SIZE * badgeScale}
         fontWeight={700}
-        fill="#031A42"
+        fill={BADGE_TEXT_COLOR}
         fontFamily="'DM Sans', sans-serif"
         dominantBaseline="central"
         style={{ pointerEvents: "none" }}
@@ -424,18 +475,23 @@ function BadgeDraggable({ country, icon, badgeRadius, badgeStroke, onDrag, posX,
 
 export default function App() {
   const [data, setData] = useState(DEFAULT_DATA);
+  const [flagData, setFlagData] = useState({});
   const [geoData, setGeoData] = useState(null);
   const [labelPositions, setLabelPositions] = useState(INITIAL_POSITIONS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [title, setTitle] = useState("PRINCIPALES PRODUCTORES (*)");
   const [source, setSource] = useState("(*) Fuente: IFA 2024.");
+  const [includeMeta, setIncludeMeta] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const [strokeWidth, setStrokeWidth] = useState(0.5);
   const [pctSize, setPctSize] = useState(10);
-  const [badgeRadius, setBadgeRadius] = useState(10);
-  const [badgeStroke, setBadgeStroke] = useState(0.5);
+  const [badgeRadius, setBadgeRadius] = useState(9);
+  const [badgeStroke, setBadgeStroke] = useState(BADGE_BORDER);
+  const [badgeScale, setBadgeScale] = useState(0.75);
+  const [badgePadding, setBadgePadding] = useState(-1);
+  const [flagScale, setFlagScale] = useState(1.4);
   const [connectorStroke, setConnectorStroke] = useState(0.4);
   const [mapScale, setMapScale] = useState(155);
   const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
@@ -451,6 +507,29 @@ export default function App() {
     [mapScale, mapOffset],
   );
   const pathGenerator = useMemo(() => d3.geoPath().projection(projection), [projection]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const icons = [...new Set(Object.values(COUNTRY_DB).map((entry) => entry.icon))];
+
+    Promise.all(
+      icons.map(async (icon) => {
+        try {
+          return [icon, await fetchFlagDataUri(icon)];
+        } catch {
+          return [icon, FALLBACK_FLAG_URL];
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) {
+        setFlagData(Object.fromEntries(entries));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
@@ -490,9 +569,9 @@ export default function App() {
         const center = getCountryCenter(d.country);
         if (center) updated[d.country] = { x: center.x, y: center.y - 35 };
       });
-      setLabelPositions(resolveOverlaps(updated, data));
+      setLabelPositions(resolveOverlaps(updated, data, badgeScale, badgePadding));
     }
-  }, [data, geoData, getCountryCenter, labelPositions]);
+  }, [data, geoData, getCountryCenter, labelPositions, badgeScale, badgePadding]);
 
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const getOpacity = (val) => (val / maxVal) * 0.8 + 0.2;
@@ -520,7 +599,7 @@ export default function App() {
   );
 
   const handleResolveOverlaps = () => {
-    setLabelPositions((prev) => resolveOverlaps({ ...prev }, data));
+    setLabelPositions((prev) => resolveOverlaps({ ...prev }, data, badgeScale, badgePadding));
   };
 
   const handleCopyPositions = () => {
@@ -634,8 +713,25 @@ export default function App() {
           <Slider label="Escala mapa" value={mapScale} onChange={setMapScale} min={80} max={400} step={5} unit="" />
           <Slider label="Stroke mapa" value={strokeWidth} onChange={setStrokeWidth} min={0} max={2} step={0.1} unit="px" />
           <Slider label="Tamano %" value={pctSize} onChange={setPctSize} min={6} max={28} step={1} unit="px" />
-          <Slider label="Radio badge" value={badgeRadius} onChange={setBadgeRadius} min={2} max={14} step={1} unit="px" />
-          <Slider label="Stroke badge" value={badgeStroke} onChange={setBadgeStroke} min={0} max={2} step={0.1} unit="px" />
+          <details style={{ marginBottom: 8 }}>
+            <summary
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: "#666",
+                cursor: "pointer",
+                listStyle: "none",
+                marginBottom: 8
+              }}
+            >
+              Ajustes badge
+            </summary>
+            <Slider label="Escala badge" value={badgeScale} onChange={setBadgeScale} min={0.6} max={1.4} step={0.05} unit="x" />
+            <Slider label="Padding badge" value={badgePadding} onChange={setBadgePadding} min={-2} max={10} step={1} unit="px" />
+            <Slider label="Escala bandera" value={flagScale} onChange={setFlagScale} min={0.6} max={1.4} step={0.05} unit="x" />
+            <Slider label="Radio badge" value={badgeRadius} onChange={setBadgeRadius} min={2} max={14} step={1} unit="px" />
+            <Slider label="Stroke badge" value={badgeStroke} onChange={setBadgeStroke} min={0} max={2} step={0.1} unit="px" />
+          </details>
           <Slider label="Linea conector" value={connectorStroke} onChange={setConnectorStroke} min={0} max={2} step={0.1} unit="px" />
         </div>
 
@@ -713,7 +809,7 @@ export default function App() {
             <div key={`${d.country}-${i}`} style={{ display: "flex", gap: 3, marginBottom: 2, alignItems: "center" }}>
               {info ? (
                 <img
-                  src={flagUrl(info.icon)}
+                  src={flagUrl(info.icon, flagData)}
                   alt=""
                   style={{ width: 18, height: 14, borderRadius: 2, objectFit: "cover", flexShrink: 0 }}
                 />
@@ -824,6 +920,51 @@ export default function App() {
           </button>
         </div>
 
+        <button
+          onClick={() => setIncludeMeta((prev) => !prev)}
+          style={{
+            width: "100%",
+            marginTop: 8,
+            padding: "8px 10px",
+            border: "1px solid #e0e0e0",
+            borderRadius: 8,
+            background: "#fafaf8",
+            color: "#666",
+            cursor: "pointer",
+            fontSize: 10,
+            fontWeight: 700,
+            fontFamily: "'DM Sans', sans-serif",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between"
+          }}
+        >
+          <span>Incluir titulo y fuente</span>
+          <span
+            style={{
+              width: 34,
+              height: 20,
+              borderRadius: 999,
+              background: includeMeta ? "#4086FF" : "#d7d7d7",
+              position: "relative",
+              transition: "background 0.2s"
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: 2,
+                left: includeMeta ? 16 : 2,
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                background: "#fff",
+                transition: "left 0.2s"
+              }}
+            />
+          </span>
+        </button>
+
         <div style={{ fontSize: 8, color: "#ccc", marginTop: 8, lineHeight: 1.5 }}>
           Banderas: Emoji One v1 (CC BY-SA 4.0). Arrastra el mapa para panear y las etiquetas para reposicionar.
         </div>
@@ -907,31 +1048,35 @@ export default function App() {
               })}
             </g>
 
-            <rect x={0} y={0} width={width} height={52} fill={BG_COLOR} opacity={0.92} />
-            <text
-              x={40}
-              y={36}
-              fontSize={16}
-              fontWeight={700}
-              fill="#003DA5"
-              fontFamily="'DM Sans', sans-serif"
-              style={{ pointerEvents: "none" }}
-            >
-              {title}
-            </text>
+            {includeMeta && (
+              <>
+                <rect x={0} y={0} width={width} height={52} fill={BG_COLOR} opacity={0.92} />
+                <text
+                  x={40}
+                  y={36}
+                  fontSize={16}
+                  fontWeight={700}
+                  fill="#003DA5"
+                  fontFamily="'DM Sans', sans-serif"
+                  style={{ pointerEvents: "none" }}
+                >
+                  {title}
+                </text>
 
-            <rect x={0} y={height - 30} width={width} height={30} fill={BG_COLOR} opacity={0.85} />
-            <text
-              x={width - 40}
-              y={height - 14}
-              fontSize={10}
-              fill="#999"
-              fontFamily="'DM Sans', sans-serif"
-              textAnchor="end"
-              style={{ pointerEvents: "none" }}
-            >
-              {source}
-            </text>
+                <rect x={0} y={height - 30} width={width} height={30} fill={BG_COLOR} opacity={0.85} />
+                <text
+                  x={width - 40}
+                  y={height - 14}
+                  fontSize={10}
+                  fill="#999"
+                  fontFamily="'DM Sans', sans-serif"
+                  textAnchor="end"
+                  style={{ pointerEvents: "none" }}
+                >
+                  {source}
+                </text>
+              </>
+            )}
 
             <g>
               {data.map((d, i) => {
@@ -947,8 +1092,12 @@ export default function App() {
                     <BadgeDraggable
                       country={d.country}
                       icon={info.icon}
+                      flagData={flagData}
                       badgeRadius={badgeRadius}
                       badgeStroke={badgeStroke}
+                      badgeScale={badgeScale}
+                      badgePadding={badgePadding}
+                      flagScale={flagScale}
                       onDrag={handleLabelDrag(d.country)}
                       posX={pos.x}
                       posY={pos.y}
