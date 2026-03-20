@@ -164,18 +164,18 @@ const ANTARCTICA_ID = "010";
 
 const INITIAL_POSITIONS = {
   China: { x: 768, y: 254 },
-  India: { x: 657, y: 352 },
+  India: { x: 652, y: 330 },
   Rusia: { x: 754, y: 153 },
   EEUU: { x: 224, y: 241 },
-  "Irán": { x: 566, y: 238 },
-  Indonesia: { x: 815, y: 361 },
-  "Pakistán": { x: 645, y: 238 },
-  Egipto: { x: 460, y: 274 },
-  Qatar: { x: 559, y: 364 },
-  "Arabia Saudita": { x: 486, y: 324 }
+  "Irán": { x: 565, y: 243 },
+  Indonesia: { x: 750, y: 332 },
+  "Pakistán": { x: 640, y: 232 },
+  Egipto: { x: 474, y: 261 },
+  Qatar: { x: 566, y: 356 },
+  "Arabia Saudita": { x: 484, y: 323 }
 };
 
-const DEFAULT_MAP_OFFSET = { x: -46, y: 52 };
+const DEFAULT_MAP_OFFSET = { x: -55, y: 58 };
 
 const DEFAULT_DATA = [
   { country: "China", value: 34 },
@@ -600,6 +600,8 @@ export default function App() {
 
   const [strokeWidth, setStrokeWidth] = useState(0.5);
   const [pctSize, setPctSize] = useState(10);
+  const [minFillOpacity, setMinFillOpacity] = useState(0.2);
+  const [fillCurve, setFillCurve] = useState(0.6);
   const [badgeRadius, setBadgeRadius] = useState(9);
   const [badgeStroke, setBadgeStroke] = useState(BADGE_BORDER);
   const [badgeScale, setBadgeScale] = useState(0.75);
@@ -611,6 +613,7 @@ export default function App() {
   const [mapOffset, setMapOffset] = useState(DEFAULT_MAP_OFFSET);
 
   const svgRef = useRef(null);
+  const exportRootRef = useRef(null);
   const width = 960;
   const height = 540;
 
@@ -688,7 +691,12 @@ export default function App() {
   }, [data, geoData, getCountryCenter, labelPositions, badgeScale, badgePadding]);
 
   const maxVal = Math.max(...data.map((d) => d.value), 1);
-  const getOpacity = (val) => (val / maxVal) * 0.8 + 0.2;
+  const getOpacity = (val) => {
+    const dynamicRange = 1 - minFillOpacity;
+    const normalized = Math.max(val / maxVal, 0);
+    const curved = Math.pow(normalized, fillCurve);
+    return curved * dynamicRange + minFillOpacity;
+  };
 
   const valueMap = {};
   data.forEach((d) => {
@@ -762,8 +770,34 @@ export default function App() {
 
   const exportSVG = () => {
     const svgEl = svgRef.current;
-    if (!svgEl) return;
-    let svgStr = new XMLSerializer().serializeToString(svgEl);
+    const exportRootEl = exportRootRef.current;
+    if (!svgEl || !exportRootEl) return;
+    const bbox = exportRootEl.getBBox();
+    const margin = 24;
+    const exportViewBox = {
+      x: Math.floor(bbox.x - margin),
+      y: Math.floor(bbox.y - margin),
+      width: Math.ceil(bbox.width + margin * 2),
+      height: Math.ceil(bbox.height + margin * 2)
+    };
+    const exportSvg = svgEl.cloneNode(true);
+    exportSvg.setAttribute("viewBox", `${exportViewBox.x} ${exportViewBox.y} ${exportViewBox.width} ${exportViewBox.height}`);
+    exportSvg.setAttribute("width", String(exportViewBox.width));
+    exportSvg.setAttribute("height", String(exportViewBox.height));
+    exportSvg.style.width = `${exportViewBox.width}px`;
+    exportSvg.style.height = `${exportViewBox.height}px`;
+    exportSvg.style.maxHeight = "none";
+    const clonedExportRoot = exportSvg.querySelector("[data-export-root='true']");
+    if (includeBackground && clonedExportRoot) {
+      const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bgRect.setAttribute("x", String(exportViewBox.x));
+      bgRect.setAttribute("y", String(exportViewBox.y));
+      bgRect.setAttribute("width", String(exportViewBox.width));
+      bgRect.setAttribute("height", String(exportViewBox.height));
+      bgRect.setAttribute("fill", BG_COLOR);
+      clonedExportRoot.insertBefore(bgRect, clonedExportRoot.firstChild);
+    }
+    let svgStr = new XMLSerializer().serializeToString(exportSvg);
     svgStr = svgStr.replace(/cursor: ?[a-z-]*/g, "");
     const blob = new Blob([svgStr], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
@@ -776,23 +810,49 @@ export default function App() {
 
   const exportPNG = () => {
     const svgEl = svgRef.current;
-    if (!svgEl) return;
-    const svgStr = new XMLSerializer().serializeToString(svgEl);
+    const exportRootEl = exportRootRef.current;
+    if (!svgEl || !exportRootEl) return;
+    const bbox = exportRootEl.getBBox();
+    const margin = 24;
+    const exportViewBox = {
+      x: Math.floor(bbox.x - margin),
+      y: Math.floor(bbox.y - margin),
+      width: Math.ceil(bbox.width + margin * 2),
+      height: Math.ceil(bbox.height + margin * 2)
+    };
+    const exportSvg = svgEl.cloneNode(true);
+    exportSvg.setAttribute("viewBox", `${exportViewBox.x} ${exportViewBox.y} ${exportViewBox.width} ${exportViewBox.height}`);
+    exportSvg.setAttribute("width", String(exportViewBox.width));
+    exportSvg.setAttribute("height", String(exportViewBox.height));
+    exportSvg.style.width = `${exportViewBox.width}px`;
+    exportSvg.style.height = `${exportViewBox.height}px`;
+    exportSvg.style.maxHeight = "none";
+    const clonedExportRoot = exportSvg.querySelector("[data-export-root='true']");
+    if (includeBackground && clonedExportRoot) {
+      const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bgRect.setAttribute("x", String(exportViewBox.x));
+      bgRect.setAttribute("y", String(exportViewBox.y));
+      bgRect.setAttribute("width", String(exportViewBox.width));
+      bgRect.setAttribute("height", String(exportViewBox.height));
+      bgRect.setAttribute("fill", BG_COLOR);
+      clonedExportRoot.insertBefore(bgRect, clonedExportRoot.firstChild);
+    }
+    const svgStr = new XMLSerializer().serializeToString(exportSvg);
     const canvas = document.createElement("canvas");
     const scale = 3;
-    canvas.width = width * scale;
-    canvas.height = height * scale;
+    canvas.width = exportViewBox.width * scale;
+    canvas.height = exportViewBox.height * scale;
     const ctx = canvas.getContext("2d");
     ctx.scale(scale, scale);
     const img = new Image();
     img.onload = () => {
       if (includeBackground) {
         ctx.fillStyle = BG_COLOR;
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillRect(0, 0, exportViewBox.width, exportViewBox.height);
       } else {
-        ctx.clearRect(0, 0, width, height);
+        ctx.clearRect(0, 0, exportViewBox.width, exportViewBox.height);
       }
-      ctx.drawImage(img, 0, 0, width, height);
+      ctx.drawImage(img, 0, 0, exportViewBox.width, exportViewBox.height);
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
       a.download = "mapa-profertil-urea.png";
@@ -851,7 +911,7 @@ export default function App() {
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14, color: "#031A42", letterSpacing: -0.3 }}>
-            Bong Map Tool
+            Profertil-Bong Urea Map Tool
           </div>
 
           <div style={{ marginBottom: 10 }}>
@@ -879,6 +939,8 @@ export default function App() {
           <div style={{ background: "#fafaf8", borderRadius: 8, padding: "10px 10px 2px", marginBottom: 6, border: "1px solid #f0ede5" }}>
             <Slider label="Escala mapa" value={mapScale} onChange={setMapScale} min={80} max={400} step={5} unit="" />
             <Slider label="Stroke mapa" value={strokeWidth} onChange={setStrokeWidth} min={0} max={2} step={0.1} unit="px" />
+            <Slider label="Min color mapa" value={minFillOpacity} onChange={setMinFillOpacity} min={0.05} max={0.8} step={0.05} unit="" />
+            <Slider label="Curva color mapa" value={fillCurve} onChange={setFillCurve} min={0.3} max={1.4} step={0.05} unit="" />
             <Slider label="Tamano %" value={pctSize} onChange={setPctSize} min={6} max={28} step={1} unit="px" />
             <Slider label="Linea conector" value={connectorStroke} onChange={setConnectorStroke} min={0} max={2} step={0.1} unit="px" />
             <details style={{ marginBottom: 10 }}>
@@ -1250,7 +1312,8 @@ export default function App() {
             xmlnsXlink="http://www.w3.org/1999/xlink"
             onMouseDown={onMapMouseDown}
           >
-            {includeBackground && <rect x={0} y={0} width={width} height={height} fill={BG_COLOR} />}
+            <g ref={exportRootRef} data-export-root="true">
+              {includeBackground && <rect x={0} y={0} width={width} height={height} fill={BG_COLOR} />}
 
             <g>
               {geoData.features.map((feature, i) => {
@@ -1370,6 +1433,7 @@ export default function App() {
                   </g>
                 );
               })}
+            </g>
             </g>
           </svg>
         )}

@@ -1,4 +1,4 @@
-# Bong Map Tool
+# Profertil-Bong Urea Map Tool
 
 Herramienta web para editar, ajustar y exportar mapas coropléticos con etiquetas flotantes, banderas y porcentajes.
 
