@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as d3 from "d3";
+import { geoWinkel3 } from "d3-geo-projection";
 
 const ICONIFY_PREFIX = "emojione-v1";
 const FLAG_ICON_NAMES = {
@@ -163,19 +164,19 @@ const CENTROIDS = {
 const ANTARCTICA_ID = "010";
 
 const INITIAL_POSITIONS = {
-  China: { x: 768, y: 254 },
-  India: { x: 652, y: 330 },
-  Rusia: { x: 754, y: 153 },
-  EEUU: { x: 224, y: 241 },
-  "Irán": { x: 565, y: 243 },
-  Indonesia: { x: 750, y: 332 },
+  China: { x: 797, y: 249 },
+  India: { x: 671, y: 350 },
+  Rusia: { x: 724, y: 146 },
+  EEUU: { x: 202, y: 251 },
+  "Irán": { x: 534, y: 245 },
+  Indonesia: { x: 807, y: 372 },
   "Pakistán": { x: 640, y: 232 },
-  Egipto: { x: 474, y: 261 },
-  Qatar: { x: 566, y: 356 },
-  "Arabia Saudita": { x: 484, y: 323 }
+  Egipto: { x: 445, y: 271 },
+  Qatar: { x: 563, y: 352 },
+  "Arabia Saudita": { x: 466, y: 324 }
 };
 
-const DEFAULT_MAP_OFFSET = { x: -55, y: 58 };
+const DEFAULT_MAP_OFFSET = { x: -59, y: 94 };
 
 const DEFAULT_DATA = [
   { country: "China", value: 34 },
@@ -268,13 +269,16 @@ function decodeTopojson(topo, objectName) {
   };
 }
 
-function estimateBadgeWidth(country, badgeScale, badgePadding) {
+function estimateBadgeWidth(country, badgeScale, badgePadding, badgeFontSize) {
+  const leftPad = BADGE_LEFT_PAD * badgeScale + badgePadding;
+  const rightPad = BADGE_RIGHT_PAD * badgeScale + badgePadding;
+  const gap = BADGE_TEXT_GAP * badgeScale;
   return (
-    (BADGE_LEFT_PAD + badgePadding) +
+    leftPad +
     BADGE_FLAG_W * badgeScale +
-    BADGE_TEXT_GAP +
-    country.length * (8.4 * badgeScale) +
-    (BADGE_RIGHT_PAD + badgePadding)
+    gap +
+    country.length * (badgeFontSize * 0.82 * badgeScale) +
+    rightPad
   );
 }
 
@@ -295,17 +299,53 @@ const BADGE_RADIUS = 10;
 const BADGE_BORDER = 1.8013;
 const BADGE_FONT_SIZE = 9.8;
 
+const PROJECTION_OPTIONS = [
+  { value: "mercator", label: "Mercator" },
+  { value: "miller", label: "Miller" },
+  { value: "winkel3", label: "Winkel Tripel" },
+  { value: "naturalEarth", label: "Natural Earth" },
+  { value: "equalEarth", label: "Equal Earth" },
+  { value: "equirectangular", label: "Equirectangular" }
+];
+
 function buildProjection() {
   return d3.geoMercator();
 }
 
-function resolveOverlaps(positions, data, badgeScale, badgePadding, iterations = 30) {
+function buildProjectionByType(type) {
+  switch (type) {
+    case "miller":
+      return d3.geoProjection((lambda, phi) => [
+        lambda,
+        1.25 * Math.log(Math.tan(Math.PI / 4 + 0.4 * phi))
+      ]);
+    case "winkel3":
+      return geoWinkel3();
+    case "naturalEarth":
+      return d3.geoNaturalEarth1();
+    case "equalEarth":
+      return d3.geoEqualEarth();
+    case "equirectangular":
+      return d3.geoEquirectangular();
+    case "mercator":
+    default:
+      return d3.geoMercator();
+  }
+}
+
+function resolveOverlaps(positions, data, badgeScale, badgePadding, badgeFontSize, iterations = 30) {
   const badgeHeight = getBadgeHeight(badgeScale, badgePadding);
   const items = data
     .map((d) => {
       const pos = positions[d.country];
       if (!pos) return null;
-      return { country: d.country, x: pos.x, y: pos.y, w: estimateBadgeWidth(d.country, badgeScale, badgePadding), h: badgeHeight };
+      return {
+        country: d.country,
+        x: pos.x,
+        y: pos.y,
+        w: estimateBadgeWidth(d.country, badgeScale, badgePadding, badgeFontSize),
+        h: badgeHeight
+      };
     })
     .filter(Boolean);
 
@@ -455,6 +495,36 @@ function ToggleRow({ label, checked, onToggle }) {
   );
 }
 
+function Select({ label, value, onChange, options }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <span style={{ fontSize: 9, fontWeight: 600, color: "#888" }}>{label}</span>
+      </div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: "100%",
+          padding: "7px 8px",
+          border: "1px solid #d8d8d8",
+          borderRadius: 6,
+          background: "#fff",
+          color: "#031A42",
+          fontSize: 11,
+          fontFamily: "'DM Sans', sans-serif"
+        }}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function useMapDrag(setMapOffset) {
   const [dragging, setDragging] = useState(false);
   const startRef = useRef({ x: 0, y: 0 });
@@ -507,6 +577,7 @@ function BadgeDraggable({
   badgePadding,
   flagScale,
   badgeFontWeight,
+  badgeFontSize,
   onDrag,
   posX,
   posY
@@ -518,7 +589,7 @@ function BadgeDraggable({
 
   useEffect(() => {
     if (textRef.current) setTextW(textRef.current.getBBox().width);
-  }, [country]);
+  }, [country, badgeFontSize, badgeScale, badgeFontWeight]);
 
   const handleMouseDown = (e) => {
     e.preventDefault();
@@ -539,13 +610,13 @@ function BadgeDraggable({
     };
   }, [dragging, offset, onDrag]);
 
-  const padX = BADGE_LEFT_PAD + badgePadding;
+  const padX = BADGE_LEFT_PAD * badgeScale + badgePadding;
   const flagBoxW = BADGE_FLAG_W * badgeScale;
   const flagBoxH = BADGE_FLAG_H * badgeScale;
   const flagW = flagBoxW * flagScale;
   const flagH = flagBoxH * flagScale;
-  const gap = BADGE_TEXT_GAP;
-  const totalW = padX + flagBoxW + gap + textW + (BADGE_RIGHT_PAD + badgePadding);
+  const gap = BADGE_TEXT_GAP * badgeScale;
+  const totalW = padX + flagBoxW + gap + textW + (BADGE_RIGHT_PAD * badgeScale + badgePadding);
   const badgeH = getBadgeHeight(badgeScale, badgePadding);
   const badgeX = -totalW / 2;
   const badgeY = -badgeH;
@@ -559,7 +630,7 @@ function BadgeDraggable({
         y={badgeY}
         width={totalW}
         height={badgeH}
-        rx={badgeRadius}
+        rx={badgeRadius * badgeScale}
         fill="white"
         stroke={BADGE_STROKE_COLOR}
         strokeWidth={badgeStroke}
@@ -569,7 +640,7 @@ function BadgeDraggable({
         ref={textRef}
         x={badgeX + padX + flagBoxW + gap}
         y={badgeY + badgeH / 2 + 0.8}
-        fontSize={BADGE_FONT_SIZE * badgeScale}
+        fontSize={badgeFontSize * badgeScale}
         fontWeight={badgeFontWeight}
         fill={BADGE_TEXT_COLOR}
         fontFamily="'DM Sans', sans-serif"
@@ -602,14 +673,16 @@ export default function App() {
   const [pctSize, setPctSize] = useState(10);
   const [minFillOpacity, setMinFillOpacity] = useState(0.2);
   const [fillCurve, setFillCurve] = useState(0.6);
-  const [badgeRadius, setBadgeRadius] = useState(9);
-  const [badgeStroke, setBadgeStroke] = useState(BADGE_BORDER);
-  const [badgeScale, setBadgeScale] = useState(0.75);
+  const [projectionType, setProjectionType] = useState("winkel3");
+  const [badgeRadius, setBadgeRadius] = useState(13);
+  const [badgeStroke, setBadgeStroke] = useState(1.4);
+  const [badgeScale, setBadgeScale] = useState(0.85);
   const [badgePadding, setBadgePadding] = useState(-1);
   const [flagScale, setFlagScale] = useState(1.4);
-  const [badgeFontWeight, setBadgeFontWeight] = useState(700);
+  const [badgeFontWeight, setBadgeFontWeight] = useState(500);
+  const [badgeFontSize, setBadgeFontSize] = useState(10.4);
   const [connectorStroke, setConnectorStroke] = useState(0.4);
-  const [mapScale, setMapScale] = useState(155);
+  const [mapScale, setMapScale] = useState(230);
   const [mapOffset, setMapOffset] = useState(DEFAULT_MAP_OFFSET);
 
   const svgRef = useRef(null);
@@ -620,8 +693,8 @@ export default function App() {
   const { onMouseDown: onMapMouseDown, dragging: mapDragging } = useMapDrag(setMapOffset);
 
   const projection = useMemo(
-    () => buildProjection().scale(mapScale).translate([width / 2 + mapOffset.x, height / 2 + 20 + mapOffset.y]),
-    [mapScale, mapOffset],
+    () => buildProjectionByType(projectionType).scale(mapScale).translate([width / 2 + mapOffset.x, height / 2 + 20 + mapOffset.y]),
+    [mapScale, mapOffset, projectionType],
   );
   const pathGenerator = useMemo(() => d3.geoPath().projection(projection), [projection]);
 
@@ -686,9 +759,9 @@ export default function App() {
         const center = getCountryCenter(d.country);
         if (center) updated[d.country] = { x: center.x, y: center.y - 35 };
       });
-      setLabelPositions(resolveOverlaps(updated, data, badgeScale, badgePadding));
+      setLabelPositions(resolveOverlaps(updated, data, badgeScale, badgePadding, badgeFontSize));
     }
-  }, [data, geoData, getCountryCenter, labelPositions, badgeScale, badgePadding]);
+  }, [data, geoData, getCountryCenter, labelPositions, badgeScale, badgePadding, badgeFontSize]);
 
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const getOpacity = (val) => {
@@ -743,7 +816,7 @@ export default function App() {
   );
 
   const handleResolveOverlaps = () => {
-    setLabelPositions((prev) => resolveOverlaps({ ...prev }, data, badgeScale, badgePadding));
+    setLabelPositions((prev) => resolveOverlaps({ ...prev }, data, badgeScale, badgePadding, badgeFontSize));
   };
 
   const handleCopyPositions = () => {
@@ -937,6 +1010,7 @@ export default function App() {
             Controles visuales
           </div>
           <div style={{ background: "#fafaf8", borderRadius: 8, padding: "10px 10px 2px", marginBottom: 6, border: "1px solid #f0ede5" }}>
+            <Select label="Proyeccion" value={projectionType} onChange={setProjectionType} options={PROJECTION_OPTIONS} />
             <Slider label="Escala mapa" value={mapScale} onChange={setMapScale} min={80} max={400} step={5} unit="" />
             <Slider label="Stroke mapa" value={strokeWidth} onChange={setStrokeWidth} min={0} max={2} step={0.1} unit="px" />
             <Slider label="Min color mapa" value={minFillOpacity} onChange={setMinFillOpacity} min={0.05} max={0.8} step={0.05} unit="" />
@@ -968,6 +1042,7 @@ export default function App() {
               <Slider label="Escala badge" value={badgeScale} onChange={setBadgeScale} min={0.6} max={1.4} step={0.05} unit="x" />
               <Slider label="Padding badge" value={badgePadding} onChange={setBadgePadding} min={-2} max={10} step={1} unit="px" />
               <Slider label="Escala bandera" value={flagScale} onChange={setFlagScale} min={0.6} max={1.4} step={0.05} unit="x" />
+              <Slider label="Tamano texto" value={badgeFontSize} onChange={setBadgeFontSize} min={8} max={16} step={0.2} unit="px" />
               <Slider label="Peso fuente" value={badgeFontWeight} onChange={setBadgeFontWeight} min={400} max={800} step={50} unit="" />
               <Slider label="Radio badge" value={badgeRadius} onChange={setBadgeRadius} min={2} max={14} step={1} unit="px" />
               <Slider label="Stroke badge" value={badgeStroke} onChange={setBadgeStroke} min={0} max={2} step={0.1} unit="px" />
@@ -1426,6 +1501,7 @@ export default function App() {
                       badgePadding={badgePadding}
                       flagScale={flagScale}
                       badgeFontWeight={badgeFontWeight}
+                      badgeFontSize={badgeFontSize}
                       onDrag={handleLabelDrag(d.country)}
                       posX={pos.x}
                       posY={pos.y}
