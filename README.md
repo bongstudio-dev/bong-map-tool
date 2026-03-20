@@ -1,35 +1,40 @@
-# Bong Map Tool
+# Map Urea Generator
 
-Herramienta de visualización de mapas choropleth por [Bong Studio](https://bongstudio.ar).
+Herramienta web para editar y exportar mapas coropléticos de productores de urea en SVG o PNG.
 
-Permite crear mapas mundiales con escala cromática basada en datos tabulares, etiquetas con banderas arrastrables, y exportar a SVG o PNG.
+## Stack
 
-## Uso
+- React
+- Vite
+- D3
 
-**Online:** [bongstudio.github.io/bong-map-tool](https://bongstudio.github.io/bong-map-tool)
+## Desarrollo local
 
-**Local:**
 ```bash
 npm install
 npm run dev
 ```
 
-## Features
+La app queda disponible en `http://localhost:5173`.
 
-- Tabla de datos editable (país + valor porcentual)
-- Mapa choropleth con escala cromática automática
-- Etiquetas con banderas (Emoji One v1) arrastrables
-- Porcentajes sobre cada país con auto-contraste
-- Controles visuales: escala, stroke, tamaños, radios
-- Paneo del mapa con drag
-- Anti-overlap de etiquetas
-- Exportar posiciones como código JS
-- Exportar SVG y PNG (3x)
+## Build
 
-## Banderas
+```bash
+npm run build
+```
 
-Emoji One v1 — CC BY-SA 4.0
+## Publicar en GitHub
 
-## Stack
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin <TU_REPO>
+git push -u origin main
+```
 
-Vite + React + D3
+## Notas
+
+- El mapa mundial se descarga en runtime desde `world-atlas` en jsDelivr.
+- Las banderas están embebidas como data URI dentro del código.
