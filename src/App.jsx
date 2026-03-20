@@ -83,6 +83,57 @@ const COUNTRY_DB = {
   Paraguay: { id: "600", icon: "flag-for-paraguay" }
 };
 
+const PREFERRED_COUNTRY_NAMES = {
+  "012": "Argelia",
+  "032": "Argentina",
+  "036": "Australia",
+  "076": "Brasil",
+  "124": "Canadá",
+  "156": "China",
+  "170": "Colombia",
+  "218": "Ecuador",
+  "356": "India",
+  "360": "Indonesia",
+  "364": "Irán",
+  "484": "México",
+  "566": "Nigeria",
+  "586": "Pakistán",
+  "600": "Paraguay",
+  "634": "Qatar",
+  "643": "Rusia",
+  "682": "Arabia Saudita",
+  "764": "Thailand",
+  "792": "Turquía",
+  "818": "Egipto",
+  "840": "EEUU",
+  "858": "Uruguay"
+};
+
+function normalizeText(value) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+const COUNTRY_ALIAS_TO_CANONICAL = Object.fromEntries(
+  Object.entries(COUNTRY_DB).map(([name, info]) => [name, PREFERRED_COUNTRY_NAMES[info.id] || name]),
+);
+
+const COUNTRY_OPTIONS = Object.values(PREFERRED_COUNTRY_NAMES).sort((a, b) => a.localeCompare(b, "es"));
+
+const COUNTRY_SEARCH_INDEX = COUNTRY_OPTIONS.map((canonical) => {
+  const aliases = Object.entries(COUNTRY_ALIAS_TO_CANONICAL)
+    .filter(([, preferred]) => preferred === canonical)
+    .map(([alias]) => alias);
+  return {
+    canonical,
+    normalizedCanonical: normalizeText(canonical),
+    normalizedAliases: aliases.map(normalizeText)
+  };
+});
+
 const CENTROIDS = {
   "156": [105, 35],
   "356": [79, 22],
@@ -313,6 +364,7 @@ function FlagIcon({ icon, flagData, x, y, w, h }) {
       </defs>
       <image
         href={flagUrl(icon, flagData)}
+        xlinkHref={flagUrl(icon, flagData)}
         x={x}
         y={y}
         width={w}
@@ -476,6 +528,7 @@ function BadgeDraggable({
 export default function App() {
   const [data, setData] = useState(DEFAULT_DATA);
   const [flagData, setFlagData] = useState({});
+  const [activeCountryRow, setActiveCountryRow] = useState(null);
   const [geoData, setGeoData] = useState(null);
   const [labelPositions, setLabelPositions] = useState(INITIAL_POSITIONS);
   const [loading, setLoading] = useState(true);
@@ -587,6 +640,28 @@ export default function App() {
       prev.map((d, i) => (i === index ? { ...d, [field]: field === "value" ? Number(value) || 0 : value } : d)),
     );
   };
+
+  const getCountrySuggestions = useCallback((query) => {
+    const normalizedQuery = normalizeText(query);
+    if (!normalizedQuery) return COUNTRY_OPTIONS.slice(0, 8);
+
+    return COUNTRY_SEARCH_INDEX.filter(
+      (entry) =>
+        entry.normalizedCanonical.includes(normalizedQuery) ||
+        entry.normalizedAliases.some((alias) => alias.includes(normalizedQuery)),
+    )
+      .map((entry) => entry.canonical)
+      .slice(0, 8);
+  }, []);
+
+  const canonicalizeCountry = useCallback((value) => {
+    const normalizedValue = normalizeText(value);
+    const direct = COUNTRY_SEARCH_INDEX.find(
+      (entry) =>
+        entry.normalizedCanonical === normalizedValue || entry.normalizedAliases.some((alias) => alias === normalizedValue),
+    );
+    return direct?.canonical || value;
+  }, []);
 
   const addRow = () => setData((prev) => [...prev, { country: "", value: 0 }]);
   const removeRow = (index) => setData((prev) => prev.filter((_, i) => i !== index));
@@ -713,18 +788,28 @@ export default function App() {
           <Slider label="Escala mapa" value={mapScale} onChange={setMapScale} min={80} max={400} step={5} unit="" />
           <Slider label="Stroke mapa" value={strokeWidth} onChange={setStrokeWidth} min={0} max={2} step={0.1} unit="px" />
           <Slider label="Tamano %" value={pctSize} onChange={setPctSize} min={6} max={28} step={1} unit="px" />
-          <details style={{ marginBottom: 8 }}>
+          <Slider label="Linea conector" value={connectorStroke} onChange={setConnectorStroke} min={0} max={2} step={0.1} unit="px" />
+          <details style={{ marginBottom: 10 }}>
             <summary
               style={{
-                fontSize: 9,
+                fontSize: 10,
                 fontWeight: 700,
-                color: "#666",
+                color: "#4b5563",
                 cursor: "pointer",
                 listStyle: "none",
-                marginBottom: 8
+                marginBottom: 8,
+                padding: "8px 10px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 8,
+                background: "#fff",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                userSelect: "none"
               }}
             >
-              Ajustes badge
+              <span style={{ fontSize: 11, lineHeight: 1, color: "#6b7280" }}>▸</span>
+              <span>Ajustes badge</span>
             </summary>
             <Slider label="Escala badge" value={badgeScale} onChange={setBadgeScale} min={0.6} max={1.4} step={0.05} unit="x" />
             <Slider label="Padding badge" value={badgePadding} onChange={setBadgePadding} min={-2} max={10} step={1} unit="px" />
@@ -732,7 +817,6 @@ export default function App() {
             <Slider label="Radio badge" value={badgeRadius} onChange={setBadgeRadius} min={2} max={14} step={1} unit="px" />
             <Slider label="Stroke badge" value={badgeStroke} onChange={setBadgeStroke} min={0} max={2} step={0.1} unit="px" />
           </details>
-          <Slider label="Linea conector" value={connectorStroke} onChange={setConnectorStroke} min={0} max={2} step={0.1} unit="px" />
         </div>
 
         <button
@@ -805,8 +889,9 @@ export default function App() {
 
         {data.map((d, i) => {
           const info = COUNTRY_DB[d.country];
+          const suggestions = activeCountryRow === i ? getCountrySuggestions(d.country) : [];
           return (
-            <div key={`${d.country}-${i}`} style={{ display: "flex", gap: 3, marginBottom: 2, alignItems: "center" }}>
+            <div key={`${d.country}-${i}`} style={{ display: "flex", gap: 3, marginBottom: 2, alignItems: "center", position: "relative" }}>
               {info ? (
                 <img
                   src={flagUrl(info.icon, flagData)}
@@ -819,6 +904,17 @@ export default function App() {
               <input
                 value={d.country}
                 onChange={(e) => updateData(i, "country", e.target.value)}
+                onFocus={() => setActiveCountryRow(i)}
+                onBlur={() => {
+                  window.setTimeout(() => {
+                    setActiveCountryRow((prev) => (prev === i ? null : prev));
+                    setData((prev) =>
+                      prev.map((row, rowIndex) =>
+                        rowIndex === i ? { ...row, country: canonicalizeCountry(row.country) } : row,
+                      ),
+                    );
+                  }, 120);
+                }}
                 placeholder="Pais"
                 style={{
                   flex: 1,
@@ -830,6 +926,48 @@ export default function App() {
                   minWidth: 0
                 }}
               />
+              {activeCountryRow === i && suggestions.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 24,
+                    left: 21,
+                    right: 21,
+                    background: "#fff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                    boxShadow: "0 8px 18px rgba(3, 26, 66, 0.08)",
+                    zIndex: 20,
+                    overflow: "hidden"
+                  }}
+                >
+                  {suggestions.map((country) => (
+                    <button
+                      key={country}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        updateData(i, "country", country);
+                        setActiveCountryRow(null);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "7px 9px",
+                        border: "none",
+                        borderTop: "1px solid #f3f4f6",
+                        background: "#fff",
+                        textAlign: "left",
+                        fontSize: 11,
+                        color: "#031A42",
+                        cursor: "pointer",
+                        fontFamily: "'DM Sans', sans-serif"
+                      }}
+                    >
+                      {country}
+                    </button>
+                  ))}
+                </div>
+              )}
               <input
                 type="number"
                 value={d.value}
@@ -988,6 +1126,8 @@ export default function App() {
             xmlnsXlink="http://www.w3.org/1999/xlink"
             onMouseDown={onMapMouseDown}
           >
+            <rect x={0} y={0} width={width} height={height} fill={BG_COLOR} />
+
             <g>
               {geoData.features.map((feature, i) => {
                 const id = String(feature.id).padStart(3, "0");
