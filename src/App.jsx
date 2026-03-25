@@ -194,7 +194,7 @@ const DEFAULT_DATA = [
 const BASE_COLOR_HEX = "#4086FF";
 const BADGE_STROKE_COLOR = "#4086FF";
 const NO_DATA_COLOR = "#EDEDED";
-const BG_COLOR = "#F5F1E8";
+const BG_COLOR = "#FFFEEF";
 
 function hexToRgb(hex) {
   return {
@@ -233,7 +233,7 @@ function decodeSvgDataUri(dataUri) {
 function inlineFlagImages(svgRoot) {
   const parser = new DOMParser();
   let inlineClipCounter = 0;
-  let defsRoot = svgRoot.querySelector("defs");
+  let defsRoot = Array.from(svgRoot.children).find((child) => child.nodeName.toLowerCase() === "defs");
   if (!defsRoot) {
     defsRoot = document.createElementNS("http://www.w3.org/2000/svg", "defs");
     svgRoot.insertBefore(defsRoot, svgRoot.firstChild);
@@ -264,17 +264,26 @@ function inlineFlagImages(svgRoot) {
 
     const clipPathRef = imageEl.getAttribute("clip-path");
     const clipPathMatch = clipPathRef?.match(/^url\(#(.+)\)$/);
+    inlineClipCounter += 1;
+    const clipId = `export-inline-clip-${inlineClipCounter}`;
+    const clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+    clipPath.setAttribute("id", clipId);
+    const clipRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    clipRect.setAttribute("x", String(x));
+    clipRect.setAttribute("y", String(y));
+    clipRect.setAttribute("width", String(width));
+    clipRect.setAttribute("height", String(height));
     if (clipPathMatch) {
       const sourceClipPath = svgRoot.querySelector(`#${clipPathMatch[1]}`);
-      if (sourceClipPath) {
-        inlineClipCounter += 1;
-        const clonedClipPath = sourceClipPath.cloneNode(true);
-        const clipId = `export-inline-clip-${inlineClipCounter}`;
-        clonedClipPath.setAttribute("id", clipId);
-        defsRoot.appendChild(clonedClipPath);
-        replacement.setAttribute("clip-path", `url(#${clipId})`);
-      }
+      const sourceRect = sourceClipPath?.querySelector("rect");
+      const rx = sourceRect?.getAttribute("rx");
+      const ry = sourceRect?.getAttribute("ry");
+      if (rx != null) clipRect.setAttribute("rx", rx);
+      if (ry != null) clipRect.setAttribute("ry", ry);
     }
+    clipPath.appendChild(clipRect);
+    defsRoot.appendChild(clipPath);
+    replacement.setAttribute("clip-path", `url(#${clipId})`);
 
     Array.from(parsed.childNodes).forEach((node) => {
       replacement.appendChild(node.cloneNode(true));
@@ -575,18 +584,19 @@ function Slider({ label, value, onChange, min, max, step, unit }) {
   );
 }
 
-function ToggleRow({ label, checked, onToggle }) {
+function ToggleRow({ label, checked, onToggle, disabled = false }) {
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={disabled ? undefined : onToggle}
+      disabled={disabled}
       style={{
         width: "100%",
         padding: "8px 10px",
         border: "none",
         background: "transparent",
-        color: "#666",
-        cursor: "pointer",
+        color: disabled ? "#9ca3af" : "#666",
+        cursor: disabled ? "not-allowed" : "pointer",
         fontSize: 10,
         fontWeight: 700,
         fontFamily: "'DM Sans', sans-serif",
@@ -1036,6 +1046,45 @@ export default function App() {
     img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgStr)))}`;
   };
 
+  const exportJPG = () => {
+    const svgEl = svgRef.current;
+    const exportRootEl = exportRootRef.current;
+    if (!svgEl || !exportRootEl) return;
+    const bbox = exportRootEl.getBBox();
+    const margin = 24;
+    const exportViewBox = {
+      x: Math.floor(bbox.x - margin),
+      y: Math.floor(bbox.y - margin),
+      width: Math.ceil(bbox.width + margin * 2),
+      height: Math.ceil(bbox.height + margin * 2)
+    };
+    const exportSvg = normalizeExportSvg(svgEl, exportViewBox, includeBackground, { inlineFlags: false });
+    const svgStr = new XMLSerializer().serializeToString(exportSvg);
+    const canvas = document.createElement("canvas");
+    const scale = 3;
+    canvas.width = exportViewBox.width * scale;
+    canvas.height = exportViewBox.height * scale;
+    const ctx =
+      canvas.getContext("2d", { alpha: false, colorSpace: "srgb" }) ||
+      canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.scale(scale, scale);
+    ctx.imageSmoothingEnabled = true;
+    const img = new Image();
+    img.onload = () => {
+      // JPG has no alpha. Force an opaque base to keep colors stable in Office apps.
+      const jpgBackground = includeBackground ? BG_COLOR : "#ffffff";
+      ctx.fillStyle = jpgBackground;
+      ctx.fillRect(0, 0, exportViewBox.width, exportViewBox.height);
+      ctx.drawImage(img, 0, 0, exportViewBox.width, exportViewBox.height);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/jpeg", 0.95);
+      a.download = "mapa-profertil-urea.jpg";
+      a.click();
+    };
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgStr)))}`;
+  };
+
   const inputStyle = {
     width: "100%",
     padding: "5px 7px",
@@ -1051,8 +1100,18 @@ export default function App() {
       exportSVG();
       return;
     }
+    if (exportFormat === "jpg") {
+      exportJPG();
+      return;
+    }
     exportPNG();
   };
+
+  useEffect(() => {
+    if (exportFormat === "jpg" && !includeBackground) {
+      setIncludeBackground(true);
+    }
+  }, [exportFormat, includeBackground]);
 
   return (
     <div
@@ -1405,7 +1464,12 @@ export default function App() {
             </div>
             <ToggleRow label="Incluir titulo y fuente" checked={includeMeta} onToggle={() => setIncludeMeta((prev) => !prev)} />
             <div style={{ height: 1, background: "#ececec" }} />
-            <ToggleRow label="Incluir fondo" checked={includeBackground} onToggle={() => setIncludeBackground((prev) => !prev)} />
+            <ToggleRow
+              label="Incluir fondo"
+              checked={includeBackground}
+              onToggle={() => setIncludeBackground((prev) => !prev)}
+              disabled={exportFormat === "jpg"}
+            />
           </div>
 
           <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
@@ -1416,7 +1480,7 @@ export default function App() {
                 padding: "9px 10px",
                 border: "none",
                 borderRadius: 8,
-                background: exportFormat === "png" ? "#2D8035" : "#4086FF",
+                background: exportFormat === "png" ? "#2D8035" : exportFormat === "jpg" ? "#A16207" : "#4086FF",
                 color: "white",
                 fontSize: 11,
                 fontWeight: 800,
@@ -1425,7 +1489,7 @@ export default function App() {
                 letterSpacing: 0.2
               }}
             >
-              {exportFormat === "png" ? "EXPORTAR PNG" : "EXPORTAR SVG"}
+              {`EXPORTAR ${exportFormat.toUpperCase()}`}
             </button>
             <div
               style={{
@@ -1437,15 +1501,18 @@ export default function App() {
                 flexShrink: 0
               }}
             >
-              {["png", "svg"].map((format) => {
+              {["png", "jpg", "svg"].map((format) => {
                 const active = exportFormat === format;
                 return (
                   <button
                     key={format}
                     type="button"
-                    onClick={() => setExportFormat(format)}
+                    onClick={() => {
+                      if (format === "jpg") setIncludeBackground(true);
+                      setExportFormat(format);
+                    }}
                     style={{
-                      minWidth: 44,
+                      minWidth: 40,
                       padding: "7px 10px",
                       border: "none",
                       borderRadius: 6,
