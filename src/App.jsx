@@ -204,6 +204,136 @@ function hexToRgb(hex) {
   };
 }
 
+function rgbToHex({ r, g, b }) {
+  return `#${[r, g, b]
+    .map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function blendHex(hex, opacity, backdropHex) {
+  const color = hexToRgb(hex);
+  const backdrop = hexToRgb(backdropHex);
+  return rgbToHex({
+    r: color.r * opacity + backdrop.r * (1 - opacity),
+    g: color.g * opacity + backdrop.g * (1 - opacity),
+    b: color.b * opacity + backdrop.b * (1 - opacity)
+  });
+}
+
+function decodeSvgDataUri(dataUri) {
+  if (!dataUri?.startsWith("data:image/svg+xml")) return null;
+  const [, payload = ""] = dataUri.split(",", 2);
+  if (!payload) return null;
+  if (dataUri.includes(";base64,")) {
+    return atob(payload);
+  }
+  return decodeURIComponent(payload);
+}
+
+function inlineFlagImages(svgRoot) {
+  const parser = new DOMParser();
+  let inlineClipCounter = 0;
+  let defsRoot = svgRoot.querySelector("defs");
+  if (!defsRoot) {
+    defsRoot = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    svgRoot.insertBefore(defsRoot, svgRoot.firstChild);
+  }
+  svgRoot.querySelectorAll("image").forEach((imageEl) => {
+    const href = imageEl.getAttribute("href") || imageEl.getAttribute("xlink:href");
+    const svgMarkup = decodeSvgDataUri(href);
+    if (!svgMarkup) return;
+
+    const parsed = parser.parseFromString(svgMarkup, "image/svg+xml").documentElement;
+    if (!parsed || parsed.nodeName.toLowerCase() !== "svg") return;
+
+    const x = Number(imageEl.getAttribute("x") || 0);
+    const y = Number(imageEl.getAttribute("y") || 0);
+    const width = Number(imageEl.getAttribute("width") || 0);
+    const height = Number(imageEl.getAttribute("height") || 0);
+    const viewBox = (parsed.getAttribute("viewBox") || "0 0 64 64")
+      .trim()
+      .split(/\s+/)
+      .map(Number);
+    const [vbX = 0, vbY = 0, vbWidth = 64, vbHeight = 64] = viewBox;
+    const scale = Math.min(width / vbWidth, height / vbHeight);
+    const offsetX = x + (width - vbWidth * scale) / 2 - vbX * scale;
+    const offsetY = y + (height - vbHeight * scale) / 2 - vbY * scale;
+
+    const replacement = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    replacement.setAttribute("transform", `translate(${offsetX}, ${offsetY}) scale(${scale})`);
+
+    const clipPathRef = imageEl.getAttribute("clip-path");
+    const clipPathMatch = clipPathRef?.match(/^url\(#(.+)\)$/);
+    if (clipPathMatch) {
+      const sourceClipPath = svgRoot.querySelector(`#${clipPathMatch[1]}`);
+      if (sourceClipPath) {
+        inlineClipCounter += 1;
+        const clonedClipPath = sourceClipPath.cloneNode(true);
+        const clipId = `export-inline-clip-${inlineClipCounter}`;
+        clonedClipPath.setAttribute("id", clipId);
+        defsRoot.appendChild(clonedClipPath);
+        replacement.setAttribute("clip-path", `url(#${clipId})`);
+      }
+    }
+
+    Array.from(parsed.childNodes).forEach((node) => {
+      replacement.appendChild(node.cloneNode(true));
+    });
+
+    imageEl.replaceWith(replacement);
+  });
+}
+
+function normalizeExportSvg(svgEl, exportViewBox, includeBackground, options = {}) {
+  const { inlineFlags = true } = options;
+  const exportSvg = svgEl.cloneNode(true);
+  exportSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  exportSvg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+  exportSvg.setAttribute(
+    "viewBox",
+    `${exportViewBox.x} ${exportViewBox.y} ${exportViewBox.width} ${exportViewBox.height}`,
+  );
+  exportSvg.setAttribute("width", String(exportViewBox.width));
+  exportSvg.setAttribute("height", String(exportViewBox.height));
+  exportSvg.setAttribute("color-interpolation", "sRGB");
+  exportSvg.setAttribute("color-rendering", "optimizeQuality");
+  exportSvg.style.width = `${exportViewBox.width}px`;
+  exportSvg.style.height = `${exportViewBox.height}px`;
+  exportSvg.style.maxHeight = "none";
+  exportSvg.style.background = includeBackground ? BG_COLOR : "transparent";
+
+  const clonedExportRoot = exportSvg.querySelector("[data-export-root='true']");
+  if (includeBackground && clonedExportRoot) {
+    const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    bgRect.setAttribute("x", String(exportViewBox.x));
+    bgRect.setAttribute("y", String(exportViewBox.y));
+    bgRect.setAttribute("width", String(exportViewBox.width));
+    bgRect.setAttribute("height", String(exportViewBox.height));
+    bgRect.setAttribute("fill", BG_COLOR);
+    clonedExportRoot.insertBefore(bgRect, clonedExportRoot.firstChild);
+  }
+
+  if (inlineFlags) {
+    inlineFlagImages(exportSvg);
+  }
+
+  exportSvg.querySelectorAll("[fill-opacity]").forEach((el) => {
+    const opacity = Number(el.getAttribute("fill-opacity") ?? 1);
+    const fill = el.getAttribute("fill");
+    if (!fill || opacity >= 1) return;
+    if (fill !== BASE_COLOR_HEX) return;
+    el.setAttribute("fill", blendHex(BASE_COLOR_HEX, opacity, includeBackground ? BG_COLOR : "#ffffff"));
+    el.setAttribute("fill-opacity", "1");
+    el.removeAttribute("fillOpacity");
+  });
+
+  exportSvg.querySelectorAll("style").forEach((styleEl) => {
+    styleEl.textContent = styleEl.textContent?.replace(/cursor:\s*[^;]+;?/g, "") ?? "";
+  });
+
+  return exportSvg;
+}
+
 function luminance(r, g, b) {
   const [rs, gs, bs] = [r, g, b].map((c) => {
     const value = c / 255;
@@ -853,23 +983,7 @@ export default function App() {
       width: Math.ceil(bbox.width + margin * 2),
       height: Math.ceil(bbox.height + margin * 2)
     };
-    const exportSvg = svgEl.cloneNode(true);
-    exportSvg.setAttribute("viewBox", `${exportViewBox.x} ${exportViewBox.y} ${exportViewBox.width} ${exportViewBox.height}`);
-    exportSvg.setAttribute("width", String(exportViewBox.width));
-    exportSvg.setAttribute("height", String(exportViewBox.height));
-    exportSvg.style.width = `${exportViewBox.width}px`;
-    exportSvg.style.height = `${exportViewBox.height}px`;
-    exportSvg.style.maxHeight = "none";
-    const clonedExportRoot = exportSvg.querySelector("[data-export-root='true']");
-    if (includeBackground && clonedExportRoot) {
-      const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      bgRect.setAttribute("x", String(exportViewBox.x));
-      bgRect.setAttribute("y", String(exportViewBox.y));
-      bgRect.setAttribute("width", String(exportViewBox.width));
-      bgRect.setAttribute("height", String(exportViewBox.height));
-      bgRect.setAttribute("fill", BG_COLOR);
-      clonedExportRoot.insertBefore(bgRect, clonedExportRoot.firstChild);
-    }
+    const exportSvg = normalizeExportSvg(svgEl, exportViewBox, includeBackground, { inlineFlags: true });
     let svgStr = new XMLSerializer().serializeToString(exportSvg);
     svgStr = svgStr.replace(/cursor: ?[a-z-]*/g, "");
     const blob = new Blob([svgStr], { type: "image/svg+xml" });
@@ -893,30 +1007,18 @@ export default function App() {
       width: Math.ceil(bbox.width + margin * 2),
       height: Math.ceil(bbox.height + margin * 2)
     };
-    const exportSvg = svgEl.cloneNode(true);
-    exportSvg.setAttribute("viewBox", `${exportViewBox.x} ${exportViewBox.y} ${exportViewBox.width} ${exportViewBox.height}`);
-    exportSvg.setAttribute("width", String(exportViewBox.width));
-    exportSvg.setAttribute("height", String(exportViewBox.height));
-    exportSvg.style.width = `${exportViewBox.width}px`;
-    exportSvg.style.height = `${exportViewBox.height}px`;
-    exportSvg.style.maxHeight = "none";
-    const clonedExportRoot = exportSvg.querySelector("[data-export-root='true']");
-    if (includeBackground && clonedExportRoot) {
-      const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      bgRect.setAttribute("x", String(exportViewBox.x));
-      bgRect.setAttribute("y", String(exportViewBox.y));
-      bgRect.setAttribute("width", String(exportViewBox.width));
-      bgRect.setAttribute("height", String(exportViewBox.height));
-      bgRect.setAttribute("fill", BG_COLOR);
-      clonedExportRoot.insertBefore(bgRect, clonedExportRoot.firstChild);
-    }
+    const exportSvg = normalizeExportSvg(svgEl, exportViewBox, includeBackground, { inlineFlags: false });
     const svgStr = new XMLSerializer().serializeToString(exportSvg);
     const canvas = document.createElement("canvas");
     const scale = 3;
     canvas.width = exportViewBox.width * scale;
     canvas.height = exportViewBox.height * scale;
-    const ctx = canvas.getContext("2d");
+    const ctx =
+      canvas.getContext("2d", { alpha: true, colorSpace: "srgb" }) ||
+      canvas.getContext("2d");
+    if (!ctx) return;
     ctx.scale(scale, scale);
+    ctx.imageSmoothingEnabled = true;
     const img = new Image();
     img.onload = () => {
       if (includeBackground) {
